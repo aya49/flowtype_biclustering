@@ -20,12 +20,12 @@ meta_cell_parent_ind_dir = paste(result_dir, "/phenoParent_ind.Rdata",sep="")
 feat_dir = paste(result_dir, "/feat", sep="")
 
 ## output directories
-feat_file_cell_pval_dir = paste(result_dir, "/file-cell-pval",sep="")
-feat_file_cell_pvalTRIM_dir = paste(result_dir, "/file-cell-pvalTRIM",sep="")
-feat_file_cell_logfold_dir = paste(result_dir, "/file-cell-logfold",sep="")
-feat_file_cell_logfoldTRIM_dir = paste(result_dir, "/file-cell-logfoldTRIM",sep="")
-feat_file_cell_countAdjMax_dir = paste(result_dir, "/file-cell-countAdjMax",sep="")
-feat_file_cell_countAdjKO_dir = paste(result_dir, "/file-cell-countAdjKO",sep="")
+feat_file_cell_pval_dir = paste(feat_dir, "/file-cell-pval",sep="")
+feat_file_cell_pvalTRIM_dir = paste(feat_dir, "/file-cell-pvalTRIM",sep="")
+feat_file_cell_logfold_dir = paste(feat_dir, "/file-cell-logfold",sep="")
+feat_file_cell_logfoldTRIM_dir = paste(feat_dir, "/file-cell-logfoldTRIM",sep="")
+feat_file_cell_countAdjMax_dir = paste(feat_dir, "/file-cell-countAdjMax",sep="")
+feat_file_cell_countAdjKO_dir = paste(feat_dir, "/file-cell-countAdjKO",sep="")
 
 ## libraries
 library(stringr)
@@ -38,7 +38,7 @@ source("~/projects/IMPC/code/_funcdist.R")
 
 
 ## cores
-no_cores = detectCores() - 1
+no_cores = 10#detectCores() - 2
 registerDoMC(no_cores)
 
 
@@ -50,7 +50,7 @@ options(na.rm=T)
 
 writecsv = T
 
-adjust = c("BY","BH","bonferroni") #pvalue adjustment
+adjust = c("","BY","BH","bonferroni") #pvalue adjustment
 #test = "wilcox" #pvalue test
 cellCountThres = 200 #insignificant if count under
 pval_thres = .025 #delete phenotypes/rows without any significant changes from the pVal matrix
@@ -114,7 +114,7 @@ for (feat_type in feat_types) {
   result = foreach(k = loop.ind) %dopar% { #for each phenotype
     #for (k in 1:ncol(m)){ cat(paste(" ", j, sep="")) {
     
-    pvalcol = rep(0,length(rowcombos))
+    pvalcol = rep(0,length(rowcombos)) 
     logfold = rep(0,length(rowcombos))
     maxcount = rep(0,length(rowcombos))
     kocount = rep(0,length(rowcombos))
@@ -128,7 +128,7 @@ for (feat_type in feat_types) {
         # else if (test=="ttest") {
         #   try({ pvalcol[j] = t.test(compare1, compare2)$p.value })
         # } 
-        pvalcol[j] = -log(t.test.single(compare1, compare2))
+        pvalcol[j] = t.test.single(compare1, compare2)
         logfold[j] = log(compare2/exp(mean(log(compare1))))
         maxcount[j] = max(compare2,exp(mean(log(compare1))))
         kocount[j] = compare2
@@ -137,39 +137,38 @@ for (feat_type in feat_types) {
     return(list(pvalcol=pvalcol,logfold=logfold,maxcount=maxcount, kocount=kocount))
   }
   
-  feat_file_cell_pval = lapply(1:length(result), function(i) return(result[[i]]$pvalcol))
-  feat_file_cell_logfold = lapply(1:length(result), function(i) return(result[[i]]$logfold))
-  feat_file_cell_countAdjMax = lapply(1:length(result), function(i) return(result[[i]]$maxcount))
-  feat_file_cell_countAdjKO = lapply(1:length(result), function(i) return(result[[i]]$kocount))
+  # feat_file_cell_pval = lapply(1:length(result), function(i) return(result[[i]]$pvalcol))
+  # feat_file_cell_logfold = lapply(1:length(result), function(i) return(result[[i]]$logfold))
+  # feat_file_cell_countAdjMax = lapply(1:length(result), function(i) return(result[[i]]$maxcount))
+  # feat_file_cell_countAdjKO = lapply(1:length(result), function(i) return(result[[i]]$kocount))
+  # TimeOutput(start1)
+  
+  # feat_file_cell_pvalFULL1 = Reduce("cbind",feat_file_cell_pval)
+  feat_file_cell_pvalFULL = foreach(k=1:length(result),.combine="cbind") %dopar% { return(result[[k]]$pvalcol) }
+  feat_file_cell_logfoldFULL = foreach(k=1:length(result),.combine="cbind") %dopar% { return(result[[k]]$logfold) }
+  feat_file_cell_countAdjMaxFULL = foreach(k=1:length(result),.combine="cbind") %dopar% { return(result[[k]]$maxcount) }
+  feat_file_cell_countAdjKOFULL = foreach(k=1:length(result),.combine="cbind") %dopar% { return(result[[k]]$kocount) }
   TimeOutput(start1)
   
-  feat_file_cell_pvalFULL = foreach(k=1:length(feat_file_cell_pval),.combine="cbind") %dopar% { return(feat_file_cell_pval[[k]]) }
-  feat_file_cell_logfoldFULL = foreach(k=1:length(feat_file_cell_logfold),.combine="cbind") %dopar% { return(feat_file_cell_logfold[[k]]) }
-  feat_file_cell_countAdjMaxFULL = foreach(k=1:length(feat_file_cell_countAdjMax),.combine="cbind") %dopar% { return(feat_file_cell_countAdjMax[[k]]) }
-  feat_file_cell_countAdjKOFULL = foreach(k=1:length(feat_file_cell_countAdjKO),.combine="cbind") %dopar% { return(feat_file_cell_countAdjKO[[k]]) }
-  TimeOutput(start1)
-  
-  feat_file_cell_pvalFULL[is.nan(feat_file_cell_pvalFULL)] = 0
-  feat_file_cell_pvalFULL[feat_file_cell_pvalFULL==Inf] = 10^(ceiling(log(max(feat_file_cell_pvalFULL[feat_file_cell_pvalFULL!=Inf]),10)))
   colnames(feat_file_cell_pvalFULL) = colnames(feat_file_cell_logfoldFULL) = colnames(feat_file_cell_countAdjMaxFULL) = colnames(feat_file_cell_countAdjKOFULL) = colnames(m)
   rownames(feat_file_cell_pvalFULL) = rownames(feat_file_cell_logfoldFULL) = rownames(feat_file_cell_countAdjMaxFULL) = rownames(feat_file_cell_countAdjKOFULL) = ftKOGT
   
-  # adjust when doing Wilcox
-  # feat_file_cell_pvalAdj = foreach(i=1:ncol(feat_file_cell_pval), .combine='cbind') %dopar% {
-  #   return(p.adjust(feat_file_cell_pval[,i], method=adjust))
-  # }
-  # feat_file_cell_pvalFULL = feat_file_cell_pvalAdj
-  
-  #trim pvalues
-  feat_file_cell_pvalFULL_ = feat_file_cell_pvalFULL
+  #trim/mod pvalues
+  feat_file_cell_pvalFULL0_ = feat_file_cell_pvalFULL
   for (adj in adjust) {
     if (adj!="") {
-      feat_file_cell_pvalFULL = foreach(i=1:ncol(feat_file_cell_pvalFULL_), .combine='cbind') %dopar% {
-        return(p.adjust(feat_file_cell_pvalFULL_[,i], method=adj))
-      }
+      feat_file_cell_pvalFULL0 = lapply(i=1:ncol(feat_file_cell_pvalFULL0_), function(i) {
+        p.adjust(feat_file_cell_pvalFULL0_, method=adj)
+      })
+    } else {
+      feat_file_cell_pvalFULL0 = feat_file_cell_pvalFULL0_
     }
-    trimRowIndex <- which(apply(feat_file_cell_pvalFULL[,-1], 1, function(x) all(x<=-log(pval_thres)))==T)
-    trimColIndex <- which(apply(feat_file_cell_pvalFULL[-1,], 2, function(x) all(x<=-log(pval_thres)))==T)
+    feat_file_cell_pvalFULL = -log(feat_file_cell_pvalFULL0)
+    feat_file_cell_pvalFULL[is.nan(feat_file_cell_pvalFULL)] = 0
+    feat_file_cell_pvalFULL[feat_file_cell_pvalFULL==Inf] = 10^(ceiling(log(max(feat_file_cell_pvalFULL[feat_file_cell_pvalFULL!=Inf]),10)))
+    
+    trimRowIndex <- which(apply(feat_file_cell_pvalFULL0[,-1], 1, function(x) all(x<=-log(pval_thres))))
+    trimColIndex <- which(apply(feat_file_cell_pvalFULL0[-1,], 2, function(x) all(x<=-log(pval_thres))))
     
     save(feat_file_cell_pvalFULL, file=paste0(feat_file_cell_pval_dir, adj, "FULL.", feat_type,".Rdata"))
     feat_file_cell_pvalTRIM = feat_file_cell_pval = feat_file_cell_pvalFULL[-trimRowIndex,-trimColIndex]
@@ -189,7 +188,7 @@ for (feat_type in feat_types) {
       save(feat_file_cell_logfoldTRIM, file=paste0(feat_file_cell_logfoldTRIM_dir, "TRIM.", feat_type,".Rdata"))
       # b = feat_file_cell_logfoldTRIM; rownames(b) = meta_file[match(rownames(b),meta_file[,id_col]),target_col]
       if (writecsv) write.table(feat_file_cell_logfoldTRIM, file=paste0(feat_file_cell_logfoldTRIM_dir, "TRIM.", feat_type,".csv"), sep=",", col.names=F)
-      save(feat_file_cell_logfoldFULL, file=paste0(feat_file_cell_logfoldFULL_dir, "FULL.", feat_type,".Rdata"))
+      save(feat_file_cell_logfoldFULL, file=paste0(feat_file_cell_logfold_dir, "FULL.", feat_type,".Rdata"))
       
       feat_file_cell_countAdjMax = feat_file_cell_countAdjMaxFULL[-trimRowIndex,-trimColIndex]
       save(feat_file_cell_countAdjMax, file=paste0(feat_file_cell_countAdjMax_dir, ".", feat_type,".Rdata"))
@@ -205,7 +204,7 @@ for (feat_type in feat_types) {
   TimeOutput(start1)
   
   
-  cat("\n feat_type", feat_type,": ",TimeOutput(start1), "\n", sep="") #3iTcell ~40min
+  cat("\n feat_type", feat_type,": ",TimeOutput(start1), "\n", sep="") #IMPC Sanger P1 ~3h
 }
 
 
