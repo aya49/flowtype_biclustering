@@ -13,12 +13,11 @@ ci = 1; panel = panelL[ci]; centre = centreL[ci]
 result_dir = paste0("result/", panelL, "/", centreL); suppressWarnings(dir.create (result_dir))
 
 
-
 ## input directories
 meta_dir = paste0(result_dir,"/meta")
-meta_cell_dir = paste(meta_dir, "/cell.Rdata", sep="")
-meta_file_dir = paste(meta_dir, "/file.Rdata", sep="")
-feat_dir = paste(result_dir, "/feat", sep=""); dir.create(feat_dir, showWarnings=F)
+meta_cell_dir = paste(meta_dir, "/cell", sep="")
+meta_file_dir = paste(meta_dir, "/file", sep="")
+feat_dir = paste(result_dir, "/feat", sep="")
 feat_file_cell_count_dir = paste(feat_dir, "/file-cell-count", sep="")
 
 ## output directories
@@ -26,14 +25,14 @@ feat_file_cell_countAdj_dir = paste(feat_dir, "/file-cell-countAdj", sep="")
 feat_file_cell_countAdjLog_dir = paste(feat_dir, "/file-cell-countAdjLog", sep="")
 norm_dir = paste(result_dir, "/cell_count_norm",sep=""); dir.create(norm_dir,showWarnings=F)
 norm_factor_dir = paste(norm_dir, "/norm_factor", sep=""); dir.create(norm_factor_dir,showWarnings=F) #plot of norm factor for each file
-norm_factor_diff_log_dir = paste(norm_dir, "/norm_factor_diff_dens_logged", sep="")
+norm_factor_diff_dir = paste(norm_dir, "/norm_factor_diff", sep="")
 
 ## libraries
 library(stringr)
 library(pracma)
 library(foreach)
 library(doMC)
-#library(flowDensity)
+# library(flowDensity)
 source("~/projects/IMPC/code/_funcAlice.R")
 source("~/projects/IMPC/code/_funcdist.R")
 
@@ -49,9 +48,11 @@ registerDoMC(no_cores)
 
 
 
+
+
 ## options
-options(stringsAsFactors=F)
-options(device="cairo")
+options(stringsAsFactors=FALSE)
+# options(device="cairo")
 options(na.rm=T)
 
 writecsv = T
@@ -67,9 +68,9 @@ layer_norm = 4 #layer at which to do normalization, should have larger cell popu
 cellCountThres = c(200)#,200,500,500,500) #insignificant if count under
 
 
-## prepare data
-meta_file0 = get(load(meta_file_dir))
-meta_cell = get(load(meta_cell_dir))
+#Prepare data
+meta_file0 = get(load(paste0(meta_file_dir,".Rdata")))
+meta_cell = get(load(paste0(meta_cell_dir,".Rdata")))
 feat_file_cell_count0 = get(load(paste0(feat_file_cell_count_dir,".Rdata")))
 
 
@@ -123,22 +124,20 @@ for (ti in split_unique) {
   TimeOutput(start1)
 }
 
-feat_file_cell_countAdj = sapply(c(1:nrow(feat_file_cell_count0)), function(x) feat_file_cell_count0[x,]*f0[x])
+feat_file_cell_countAdj = sapply(c(1:nrow(feat_file_cell_count0)), function(x) {feat_file_cell_count0[x,]*f0[x]})
 feat_file_cell_countAdj = t(feat_file_cell_countAdj)
 colnames(feat_file_cell_countAdj) = colnames(feat_file_cell_count0)
 rownames(feat_file_cell_countAdj) = rownames(feat_file_cell_count0)
 
-#phenotype on cols
-feat_file_cell_countAdjlog = log(feat_file_cell_countAdj)
-feat_file_cell_countAdjlog[which(feat_file_cell_countAdjlog<0)] = 0
-
 #save
-save(f0, file=paste0(norm_factor_dir,".Rdata"))
-save(fdiff0, file=paste0(norm_factor_diff_log_dir,".Rdata"))
 save(feat_file_cell_countAdj, file=paste0(feat_file_cell_countAdj_dir,".Rdata"))
-if (writecsv) write.csv(feat_file_cell_countAdj, file=paste0(feat_file_cell_countAdj_dir,".csv"), row.names=F)
-save(feat_file_cell_countAdjlog, file=paste0(norm_factor_diff_log_dir,".Rdata"))
-if (writecsv) write.csv(feat_file_cell_countAdjlog, file=paste0(norm_factor_diff_log_dir,".csv"), row.names=F)
+if (writecsv) write.csv(feat_file_cell_countAdj, file=paste0(feat_file_cell_countAdj_dir,".csv"), row.names=T)
+save(f0, file=paste0(norm_factor_dir,".Rdata"))
+if (writecsv) write.csv(f0, file=paste0(norm_factor_dir,".csv"), row.names=T)
+save(fdiff0, file=paste0(norm_factor_diff_dir,".Rdata"))
+if (writecsv) write.csv(fdiff0, file=paste0(norm_factor_diff_dir,".csv"), row.names=T)
+
+TimeOutput(start)
 
 # #max change in slope
 # cutoff = sort(abs(fdiff))[which.max(diff(sort(abs(fdiff))))]

@@ -48,15 +48,14 @@ options(stringsAsFactors=FALSE)
 # options(device="cairo")
 options(na.rm=T)
 
+readcsv = T
 overwrite = T #overwrite biclust?
-writecsv = F
+# writecsv = F
 
 good_count = 3
 good_sample = 3
 
 
-plot_size = c(500,500)
-plot_size_bar = c(1300,2000)
 attributes = c("gene","gender","date")
 
 cellCountThres = c(200) #(needed if sample x cell pop matrices are used) insignificant if count under
@@ -64,7 +63,7 @@ control = str_split(controlL,"[|]")[[1]]
 time_col = "date"
 id_col = "fileName"
 target_col = "gene"
-order_cols = c("barcode","sample","specimen","date")
+order_cols = NULL
 split_col = NULL
 
 bcmethods = c("plaid","CC","bimax","BB-binary","nmf-nsNMF","nmf-lee","nmf-brunet","CC")
@@ -76,8 +75,13 @@ nmf_thres = .05 # * max contribution: threshold at which a row/col can be consid
 
 
 #data paths
-feat_types = list.files(path=feat_dir,pattern=".Rdata")
-feat_types = gsub(".Rdata","",feat_types)
+if (readcsv) {
+  feat_types = list.files(path=feat_dir,pattern=".csv")
+  feat_types = gsub(".csv","",feat_types)
+} else {
+  feat_types = list.files(path=feat_dir,pattern=".Rdata")
+  feat_types = gsub(".Rdata","",feat_types)
+}
 feat_count = "file-cell-countAdj"
 #feat_types = list.files(path=result_dir,pattern=glob2rx("matrix*.Rdata"))
 
@@ -98,25 +102,32 @@ feat_count = "file-cell-countAdj"
 
 start = Sys.time()
 
-centre = paste0(panel," ",centre)
-cat("\n",centre,sep="")
+if (readcsv) {
+  mc = read.csv(paste0(feat_dir,"/", feat_count,".csv"),row.names=1, check.names=F)
+  meta_file = read.csv(paste0(meta_file_dir,".csv"),check.names=F)
+} else {
+  mc = get(load(paste0(feat_dir,"/", feat_count,".Rdata")))
+  meta_file = get(load(paste0(meta_file_dir,".Rdata")))
+}
 
-
-mc = get(load(paste0(feat_dir,"/", feat_count,".Rdata")))
-meta_file = get(load(paste0(meta_file_dir,".Rdata")))
-
-f1scores0 = foreach(feat_type=feat_types) %dopar% {
-  f1scores = NULL
+a = foreach(feat_type=feat_types) %dopar% {
   tryCatch({
     cat("\n", feat_type, " ",sep="")
     start2 = Sys.time()
     
     ## upload and prep feature matrix
-    m0 = as.matrix(get(load(paste0(feat_dir,"/", feat_type,".Rdata"))))
+    if (readcsv) {
+      m0 = as.matrix(read.csv(paste0(feat_dir,"/", feat_type,".csv"),row.names=1, check.names=F))
+    } else {
+      m0 = as.matrix(get(load(paste0(feat_dir,"/", feat_type,".Rdata"))))
+    }
+    if (!rownames(m0)[1]%in%meta_file[,id_col]) {
+      cat("\nskipped: ",feat_type,", matrix rownames must match fileName column in meta_file","\n", sep="")
+    }
     layers = 0
     countThres = 0
     if (str_split(feat_type,"-")[[1]][2]=="cell") {
-      layers = c(1,2,4,max(unique(sapply(unlist(str_split(colnames(m0),"_")), function(x) str_count(x,"[+-]")))))
+      layers = c(1,2,4,max(unique(sapply(unlist(str_split(colnames(m0),"_")[[1]]), function(x) str_count(x,"[+-]")))))
       countThres = cellCountThres
     }
     
@@ -142,8 +153,9 @@ f1scores0 = foreach(feat_type=feat_types) %dopar% {
         m = m_ordered[split_ind[[tube]],]
         if (!sum(m_ordered!=0)>0) next
         sm = meta_file_ordered_split = meta_file_ordered[split_ind[[tube]],]
+        if (length(unique(sm[,target_col]))<=1) next
         
-
+        
         #for each biclustering method
         for (bcmethod in bcmethods) { #requires binary matrix
           if (bcmethod=="BB-binary" & !grepl("pval[A-z]*TRIM",feat_type)) next
@@ -159,43 +171,45 @@ f1scores0 = foreach(feat_type=feat_types) %dopar% {
             if (bcmethod == "spectral") bc = biclust(as.matrix(m), method=BCSpectral(), numberOfEigenvalues=10)
             if (bcmethod == "bimax") bc = biclust(as.matrix(m), method=BCBimax(),number=Kr)
             if (bcmethod == "quest") bc = biclust(as.matrix(m), method=BCQuest(), number=Kr, ns=50)
+            if (bc@Number==0) next
             
             if (bcmethod == "fabia") { next #don't do, do nmf instead
               bcb = fabia(as.matrix(abs(m)), p=Kr,alpha=0.01,cyc=max(ncol(m)/10,500),spl=0,spz=0.5,non_negative=0,random=1.0,center=2,norm=1,scale=0.0,lap=1.0,nL=0,lL=0,bL=0)
             }
             
             bcb = NULL
-            try({
+            tryCatch({
               if (bcmethod == "nmf-brunet") bcb = nmf(as.matrix(abs(m)), rank=Kr, method="brunet")#, nrun=10, method=list("lee", "brunet", "nsNMF"))
               if (bcmethod == "nmf-lee") bcb = nmf(as.matrix(abs(m)), rank=Kr, method="lee")
               if (bcmethod == "nmf-nsNMF") bcb = nmf(as.matrix(abs(m)), rank=Kr, method="nsNMF")
-            })
+            }, error = function(err) { cat(paste("nmf error:  ",err)); bcb = NULL })
+            if (is.null(bcb) & grepl("nmf",bcmethod)) next
             
-            ## adjust format / special plot if needed
+            ## adjust format
             if (grepl("nmf",bcmethod)) {
-              if (!is.null(bcb)) {
-                bcb$rowxfactor = basis(bcb)
-                bcb$factorxcol = coef(bcb)
+              bcb$rowxfactor = basis(bcb)
+              bcb$factorxcol = coef(bcb)
+              
+              rthres = max(bcb$rowxfactor) * nmf_thres
+              cthres = max(bcb$factorxcol) * nmf_thres
+              
+              bc = biclust(array(0,dim=c(2,2)), method=BCPlaid()) #get the framwork
+              bc@RowxNumber = array(F, dim=dim(bcb$rowxfactor)) 
+              for(ri in 1:nrow(bcb$rowxfactor)) {
+                mi = which.max(bcb$rowxfactor[ri,])
+                if (max(bcb$rowxfactor[ri,])>rthres) bc@RowxNumber[ri,mi] = T
+              }
+              bc@NumberxCol = array(F, dim=dim(bcb$factorxcol)) 
+              for(ri in 1:ncol(bcb$factorxcol)) {
+                mi = which.max(bcb$factorxcol[,ri])
+                if (max(bcb$factorxcol[,ri])>cthres) bc@NumberxCol[mi,ri] = T
                 
-                rthres = max(bcb$rowxfactor) * nmf_thres
-                cthres = max(bcb$factorxcol) * nmf_thres
-                
-                bc = biclust(array(0,dim=c(2,2)), method=BCPlaid()) #get the framwork
-                bc@RowxNumber = array(F, dim=dim(bcb$rowxfactor)) 
-                for(ri in 1:nrow(bcb$rowxfactor)) {
-                  mi = which.max(bcb$rowxfactor[ri,])
-                  if (max(bcb$rowxfactor[ri,])>rthres) bc@RowxNumber[ri,mi] = T
-                }
-                bc@NumberxCol = array(F, dim=dim(bcb$factorxcol)) 
-                for(ri in 1:ncol(bcb$factorxcol)) {
-                  mi = which.max(bcb$factorxcol[,ri])
-                  if (max(bcb$factorxcol[,ri])>cthres) bc@NumberxCol[mi,ri] = T
-                }
                 bc@Number = nrow(bcb$factorxcol)
                 
                 bc@info = list(rowxfactor=bcb$rowxfactor,factoxcol=bcb$factorxcol)
-              } else { next }
+              } 
             }
+            
             
             if (bcmethod == "BB-binary") {
               mbinary = m
@@ -224,7 +238,7 @@ f1scores0 = foreach(feat_type=feat_types) %dopar% {
                   if (length(theta)>=6 & !all(bcb$p==1)) {
                     bc@info$cid = cid = which(bcb$p<=sort(bcb$p)[4], arr.ind=T)
                   } else {
-                    save(NULL, file=paste0(bcname,".Rdata"))
+                    # save(NULL, file=paste0(bcname,".Rdata"))
                     next
                   }
                 }
@@ -256,7 +270,6 @@ f1scores0 = foreach(feat_type=feat_types) %dopar% {
             if (ncol(bc@NumberxCol) != ncol(m) | nrow(bc@NumberxCol) != bc@Number) bc@NumberxCol = t(bc@NumberxCol)
             
             
-            
             ## get & save clustering & labels! ----------------------------------
             
             if (bcmethod != "BB-binary") {
@@ -267,9 +280,9 @@ f1scores0 = foreach(feat_type=feat_types) %dopar% {
             
             names(rowclust) = names(rowlabel) = rownames(m)
             names(colclust) = colnames(m)
-            f1 = f.measure.comembership(rowlabel,rowclust)
+            # f1 = f.measure.comembership(rowlabel,rowclust)
             
-            bc0 = list(source=bc,rowclust=rowclust,colclust=colclust,rowlabel=rowlabel,scores=f1)
+            bc0 = list(source=bc,rowclust=rowclust,colclust=colclust,rowlabel=rowlabel)
             save(bc0, file=paste0(bcname,".Rdata"))
             write.csv(rowclust, file=paste0(bcname,"_rowclust.csv"))
             write.csv(colclust, file=paste0(bcname,"_colclust.csv"))
@@ -291,21 +304,36 @@ f1scores0 = foreach(feat_type=feat_types) %dopar% {
             
           }
           
+          # #temporary
+          # if (nrow(bc@RowxNumber) != nrow(m) | ncol(bc@RowxNumber) != bc@Number) bc@RowxNumber = t(bc@RowxNumber)
+          # if (ncol(bc@NumberxCol) != ncol(m) | nrow(bc@NumberxCol) != bc@Number) bc@NumberxCol = t(bc@NumberxCol)
+          # if (is.null(bc0$rowclust) & bcmethod!="BB-binary") bc0$rowclust = rowxcluster_to_cluster(bc@RowxNumber)
+          # try({
+          #   # get hard clustering; put samples into larger cluster
+          #   la = as.numeric(factor(sm[,target_col]))
+          #   if (bcmethod=="BB-binary") {
+          #     cl = bc0$rowclust = bc@info$transcript.clusters
+          #   } else {
+          #     cl = bc0$rowclust
+          #   }
+          #   bc@info$f1 = f.measure.comembership(la,cl)
+          # })
+          # save(bc, file=paste0(bcname,".Rdata")); if (writecsv) write.csv(as.matrix(bc), file=paste0(checkm(bc,bcname),".Rdata"))
           
+          rowlabel = as.numeric(factor(sm[,target_col]))
           
           # }
           
         }
         
         
-      } #layer
-    } #countThres
+      } 
+    } #layer
     TimeOutput(start2)
-  }, error = function(err) { cat(paste("ERROR:  ",err)); return(NULL) })
-  return(f1scores)
+  }, error = function(err) { cat(paste("ERROR:  ",err)); return(T) })
+  return(F)
 }
-f1scores0 = Reduce("rbind",f1scores0)
-write.csv(f1scores0,file=paste0(biclust_dir,"/scores.csv"))
+
 
 
 

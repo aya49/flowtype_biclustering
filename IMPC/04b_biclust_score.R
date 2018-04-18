@@ -63,7 +63,7 @@ order_cols = c("barcode","sample","specimen","date")
 
 #data paths
 clust_paths = list.files(path=biclust_source_dir,pattern=".Rdata", full.names=T)
-                     # list.files(path=clust_source_dir,pattern=".Rdata", full.names=T))
+# list.files(path=clust_source_dir,pattern=".Rdata", full.names=T))
 clust_paths = gsub(".Rdata","",clust_paths)
 feat_count = "file-cell-countAdj"
 
@@ -83,9 +83,6 @@ feat_count = "file-cell-countAdj"
 
 
 start = Sys.time()
-
-centre = paste0(panel," ",centre)
-cat("\n",centre,sep="")
 
 
 mc = get(load(paste0(feat_dir,"/", feat_count,".Rdata")))
@@ -111,7 +108,13 @@ score_list = foreach(clust_path=clust_paths) %dopar% {
   names(rowclust) = rownames(rowclust0)
   names(rowlabel) = rownames(rowlabel0)
   
-  rowclust_df = model.matrix(~ factor(rowclust) - 1); colnames(rowclust_df) = sort(unique(rowclust)); rownames(rowclust_df) = names(rowclust)
+  if (length(unique(rowclust))==1) {
+    rowclust_df = matrix(rep(1,length(rowclust)),ncol=1)
+    rownames(rowclust_df) = names(rowclust)
+    colnames(rowclust_df) = rowclust[1]
+  } else {
+    rowclust_df = model.matrix(~ factor(rowclust) - 1); colnames(rowclust_df) = sort(unique(rowclust)); rownames(rowclust_df) = names(rowclust)
+  }
   # rowclust1_df = model.matrix(~ factor(rowclust1) - 1); colnames(rowclust1_df) = sort(unique(rowclust1)); rownames(rowclust1_df) = names(rowclust1)
   rowlabel_df = model.matrix(~ factor(rowlabel) - 1); colnames(rowlabel_df) = sort(unique(rowlabel)); rownames(rowlabel_df) = names(rowlabel)
   rownames(rowlabel_df) = names(rowlabel)
@@ -131,9 +134,9 @@ score_list = foreach(clust_path=clust_paths) %dopar% {
   
   ## external validation f1 (clustering)
   f1c = f.measure.comembership(rowlabel,rowclust); names(f1c) = paste0(names(f1c), "_co")
-  r = adjustedRand(rowlabel,rowclust)
-  score = c(score,f1c,r)
-  
+  # r = adjustedRand(rowlabel,rowclust)
+  # score = c(score,f1c,r)
+  score = c(score,f1c)
   
   # ## internal validation NCA (distance)
   # cl = la0
@@ -174,7 +177,7 @@ score_list = foreach(clust_path=clust_paths) %dopar% {
   # names(score) = paste0(names(score),"_1")
   # fm[[colnam]][[dindname]][[cltype]][[par]] = append(fm[[colnam]][[dindname]][[cltype]][[par]], score)
   
-  write.csv(score,file=paste0(clust_path,"_score.csv"))
+  write.csv(score,file=paste0(biclust_score_dir, "/", clust_path, "_score.csv"))
   return(score)
   TimeOutput(start2)
 }
@@ -200,9 +203,9 @@ score_table = Reduce("rbind",score_list)
 
 clust_files = fileNames(clust_paths)
 clust_files_attr = str_split(clust_files,"_")
-clust_files_table = t(sapply(clust_files_attr, function(x) {
-  clust_file = c(x[1], x[2], str_split(x[3],"-")[[1]][2], gsub("layer","",x[4]), str_split(x[5],"-")[[1]][2])
-}))
+clust_files_table = t(sapply(clust_files_attr, function(x) 
+  c(x[1], x[2], str_split(x[3],"-")[[1]][2], gsub("layer","",x[4]), str_split(x[5],"-")[[1]][2])
+))
 colnames(clust_files_table) = c("method","feature","splitby","layer","count-thresh")
 
 clust_files_table_final = cbind(clust_files_table, score_table)
@@ -210,8 +213,6 @@ write.csv(clust_files_table_final, file = paste0(biclust_score_dir,".csv"))
 
 
 TimeOutput(start)
-
-
 
 
 
