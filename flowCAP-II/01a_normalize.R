@@ -20,7 +20,7 @@ feat_file_cell_countAdj_dir = paste(feat_dir, "/file-cell-countAdj", sep="")
 feat_file_cell_countAdjLog_dir = paste(feat_dir, "/file-cell-countAdjLog", sep="")
 norm_dir = paste(result_dir, "/cell_count_norm",sep=""); dir.create(norm_dir,showWarnings=F)
 norm_factor_dir = paste(norm_dir, "/norm_factor", sep=""); dir.create(norm_factor_dir,showWarnings=F) #plot of norm factor for each file
-norm_factor_diff_log_dir = paste(norm_dir, "/norm_factor_diff_dens_logged", sep="")
+norm_factor_diff_dir = paste(norm_dir, "/norm_factor_diff", sep="")
 
 ## libraries
 library(stringr)
@@ -128,17 +128,13 @@ feat_file_cell_countAdj = t(feat_file_cell_countAdj)
 colnames(feat_file_cell_countAdj) = colnames(feat_file_cell_count0)
 rownames(feat_file_cell_countAdj) = rownames(feat_file_cell_count0)
 
-#phenotype on cols
-feat_file_cell_countAdjlog = log(feat_file_cell_countAdj)
-feat_file_cell_countAdjlog[which(feat_file_cell_countAdjlog<0)] = 0
-
 #save
-save(f0, file=paste0(norm_factor_dir,".Rdata"))
-save(fdiff0, file=paste0(norm_factor_diff_log_dir,".Rdata"))
 save(feat_file_cell_countAdj, file=paste0(feat_file_cell_countAdj_dir,".Rdata"))
-if (writecsv) write.csv(feat_file_cell_countAdj, file=paste0(feat_file_cell_countAdj_dir,".csv"), row.names=F)
-save(feat_file_cell_countAdjlog, file=paste0(norm_factor_diff_log_dir,".Rdata"))
-if (writecsv) write.csv(feat_file_cell_countAdjlog, file=paste0(norm_factor_diff_log_dir,".csv"), row.names=F)
+if (writecsv) write.csv(feat_file_cell_countAdj, file=paste0(feat_file_cell_countAdj_dir,".csv"), row.names=T)
+save(f0, file=paste0(norm_factor_dir,".Rdata"))
+if (writecsv) write.csv(f0, file=paste0(norm_factor_dir,".csv"), row.names=T)
+save(fdiff0, file=paste0(norm_factor_diff_dir,".Rdata"))
+if (writecsv) write.csv(fdiff0, file=paste0(norm_factor_diff_dir,".csv"), row.names=T)
 
 TimeOutput(start)
 
