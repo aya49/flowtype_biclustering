@@ -75,12 +75,12 @@ trimMatrix <- function(m0,TRIM=T,mc=NULL,sampleMeta,sampleMeta_to_m1_col="fileNa
   if (all(m==0)) return (NULL)
   
   
-  sm = NULL
+  sm = sampleMeta
   if (!is.null(sampleMeta)) {
     # if (m0list) {
-    #   smorder = match(rownames(m[[1]]),sampleMeta[[sampleMeta_to_m1_col]])
+    #   smorder = match(rownames(m[[1]]),sampleMeta[,sampleMeta_to_m1_col])
     # } else {
-    smorder = match(rownames(m),sampleMeta[[sampleMeta_to_m1_col]])
+    smorder = match(rownames(m),as.matrix(sampleMeta)[,sampleMeta_to_m1_col])
     # }
     smorder = smorder[!is.na(smorder)]
     sm = sampleMeta[smorder,]
@@ -175,6 +175,44 @@ kmf <- function(m,cols) {
   return(list(fkffitall=fkffitall,statsfitall=statsfitall))
 }
 
+
+
+
+
+
+
+
+
+## Input: clustering filepath (currently only biclust)
+## Output: original feature matrix
+get_feat_matrix <- function(clust_fileName, feat_dir, mc, meta_file, id_col, target_col, control, order_cols=NULL, good_count=NULL, good_sample=NULL) {
+  # get original feature matrix and meta file
+  x = str_split(clust_fileName,"_")[[1]]
+  # bcmethod = x[1]
+  feature = x[2]
+  layer = as.numeric(gsub("layer","",x[4]))
+  countThres = as.numeric(str_split(x[5],"-")[[1]][2])
+  m0 = get(load(paste0(feat_dir,"/",feature,".Rdata")))
+  
+  mm = trimMatrix(m0,TRIM=T, mc=mc, sampleMeta=meta_file, sampleMeta_to_m1_col=id_col, target_col=target_col, control=control, order_cols=order_cols, colsplitlen=NULL, k=layer, countThres=countThres, goodcount=good_count, good_sample=good_sample)
+  m_ordered = mm$m
+  meta_file_ordered = mm$sm
+  
+  #split up analysis by tube etc.
+  split_col = str_split(str_split(x[3],"-")[[1]][2],"[.]")[[1]][1]
+  if (split_col=="") {
+    split_ind = list(all = 1:nrow(meta_file_ordered))
+  } else {
+    split_ids = unique(meta_file_ordered[,split_col])
+    split_ids = split_ids[!is.na(split_ids)]
+    split_ind = lapply(split_ids, function(split_id) which(meta_file_ordered[,split_col]==split_id) )
+    names(split_ind) = split_ids
+  }
+  tube = str_split(x[3],"[.]")[[1]][2]
+  m = m_ordered[split_ind[[tube]],]
+  sm = meta_file_ordered_split = meta_file_ordered[split_ind[[tube]],]
+  return(list(m=m,sm=sm))
+}
 
 
 
