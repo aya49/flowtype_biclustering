@@ -79,12 +79,20 @@ for (feat_type in feat_types) {
   ftGT = g$attlist; ftWTIndex = g$controlIndex; ftKOGT = g$exp; ftKOIndex = g$expIndex; ftKOgoodGTIndex = g$goodexpIndex; rm(g)  #Index of unique KO genotypes that has 3+ samples available ftKOIndex(ftKOGTIndexIndex)
   
   #split by tubes
+  # rowcombos = NULL
+  # for (i in length(ftKOIndex):1) {
+  #   kotube = meta_file[ftKOIndex[[i]],split_col]
+  #   wttube = meta_file[ftWTIndex,split_col]
+  #   rowcombos[[i]][[1]] = ftWTIndex[wttube==kotube]
+  #   rowcombos[[i]][[2]] = ftKOIndex[[i]] 
+  # }
+  
   rowcombos = NULL
-  for (i in length(ftKOIndex):1) {
-    kotube = meta_file[ftKOIndex[[i]],split_col]
+  for (i in nrow(m):1) {
+    kotube = meta_file[i,split_col]
     wttube = meta_file[ftWTIndex,split_col]
     rowcombos[[i]][[1]] = ftWTIndex[wttube==kotube]
-    rowcombos[[i]][[2]] = ftKOIndex[[i]] 
+    rowcombos[[i]][[2]] = i
   }
   
   cat(paste("getting pValues of ", ncol(m), " possible cell populations for ", length(rowcombos), " genotypes ", sep="")) #3iTCell specific
@@ -130,7 +138,7 @@ for (feat_type in feat_types) {
   TimeOutput(start1)
   
   colnames(feat_file_cell_pvalFULLori) = colnames(feat_file_cell_logfoldFULL) = colnames(feat_file_cell_countAdjMaxFULL) = colnames(feat_file_cell_countAdjKOFULL) = colnames(m)
-  rownames(feat_file_cell_pvalFULLori) = rownames(feat_file_cell_logfoldFULL) = rownames(feat_file_cell_countAdjMaxFULL) = rownames(feat_file_cell_countAdjKOFULL) = ftKOGT
+  rownames(feat_file_cell_pvalFULLori) = rownames(feat_file_cell_logfoldFULL) = rownames(feat_file_cell_countAdjMaxFULL) = rownames(feat_file_cell_countAdjKOFULL) = rownames(m)
   
   save(feat_file_cell_countAdjMaxFULL, file=paste0(feat_file_cell_countAdjMax_dir, "FULL.", feat_type,".Rdata"))
   save(feat_file_cell_countAdjKOFULL, file=paste0(feat_file_cell_countAdjKO_dir,"FULL.",feat_type,".Rdata"))
@@ -156,13 +164,12 @@ for (feat_type in feat_types) {
     
     feat_file_cell_pval = feat_file_cell_pvalTRIM = feat_file_cell_pvalFULL[!trimRowIndex,!trimColIndex]
     save(feat_file_cell_pval, file=paste0(feat_file_cell_pval_dir, adj, ".", feat_type,".Rdata"))
-    
     if (writecsv) write.csv(feat_file_cell_pval, file=paste0(feat_file_cell_pval_dir, adj, ".", feat_type,".csv"), row.names=T)
     
     trimIndex = feat_file_cell_pval <= -log(pval_thres)
     
     feat_file_cell_pvalTRIM[trimIndex] = 0
-    if (writecsv) write.csv(as.matrix(feat_file_cell_pvalTRIM), file=paste0(feat_file_cell_pval_dir, adj, "TRIM.", feat_type,".csv"), row.names=T)
+    if (writecsv) write.csv(feat_file_cell_pvalTRIM, file=paste0(feat_file_cell_pval_dir, adj, "TRIM.", feat_type,".csv"), row.names=T)
     feat_file_cell_pvalTRIM = Matrix(feat_file_cell_pvalTRIM, sparse=T)
     save(feat_file_cell_pvalTRIM, file=paste0(feat_file_cell_pval_dir, adj, "TRIM.", feat_type,".Rdata"))
     

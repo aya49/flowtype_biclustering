@@ -14,8 +14,7 @@ feat_dir = paste(result_dir, "/feat", sep="")
 ## output directories
 biclust_dir = paste(result_dir,  "/biclust", sep=""); dir.create (biclust_dir,showWarnings=F)
 biclust_source_dir = paste(biclust_dir,  "/source", sep=""); dir.create (biclust_source_dir,showWarnings=F)
-biclust_plot_dir = paste(biclust_dir,  "/plot", sep=""); dir.create (biclust_plot_dir,showWarnings=F)
-biclust_score_dir = paste(biclust_dir,  "/score", sep="")
+biclust_plot_dir = paste(biclust_dir,  "/plot", sep=""); dir.create (biclust_plot_dir,showWarnings=F) #path to store plots
 
 
 ## libraries
@@ -45,17 +44,18 @@ options(stringsAsFactors=FALSE)
 # options(device="cairo")
 options(na.rm=T)
 
-# readcsv = T #need to read .Rdata bicluster file
+readcsv = F
+
+readcsv = T #read features as csv or Rdata
 overwrite = T #overwrite biclust?
-writecsv = F
+# writecsv = F
 
-good_count = 3
-good_sample = 3
-
+good_count = 3 #trim matrix; only keep col/rows that meet criteria for more than 3 elements
+good_sample = 3 #trim matrix; only keep rows that are a part of a class with more than 3 samples
 
 plot_size = c(500,500)
 plot_size_bar = c(1300,2000)
-attributes = c("aml")
+attributes = c("aml") #interested attribute to plot
 
 control = "normal" #control value in target_col column for each centre
 id_col = "fileName"
@@ -70,7 +70,7 @@ split_col = "tube"
 # min_iter = 100 #min number of iterations for BB-binary (B2PS)
 # nmf_thres = .05 # * max contribution: threshold at which a row/col can be considered a significant contribution to a factor in nmf
 
-#data paths
+#biclustering result paths
 clust_paths = list.files(path=biclust_source_dir,pattern=".Rdata", full.names=T)
 # , list.files(path=clust_source_dir,pattern=".Rdata", full.names=T))
 clust_paths = gsub(".Rdata","",clust_paths)
@@ -89,20 +89,23 @@ feat_count = "file-cell-countAdj"
 
 
 
-
-
 start = Sys.time()
 
 
 
-mc = get(load(paste0(feat_dir,"/", feat_count,".Rdata")))
-meta_file = get(load(paste0(meta_file_dir,".Rdata")))
+if (readcsv) {
+  mc = read.csv(paste0(feat_dir,"/", feat_count,".csv"),row.names=1, check.names=F)
+  meta_file = read.csv(paste0(meta_file_dir,".csv"),check.names=F)
+} else {
+  mc = get(load(paste0(feat_dir,"/", feat_count,".Rdata")))
+  meta_file = get(load(paste0(meta_file_dir,".Rdata")))
+}
 
 a = foreach(clust_path=clust_paths) %dopar% {
   cat("\n", clust_path, " ",sep="")
   start2 = Sys.time()
   
-  ## prep clusters / label
+  ## prep clusters
   bc0 = get(load(paste0(clust_path,".Rdata")))
   bc = bc0$source
   if (is.null(bc0)) next
@@ -123,7 +126,7 @@ a = foreach(clust_path=clust_paths) %dopar% {
   clust_path_plot = gsub(biclust_source_dir,biclust_plot_dir,clust_path)
   
   ## nmf special plot to see factors if needed
-  if (grepl("nmf",clust_path)) {
+  if (grepl("nmf|GrNMF|fabia",clust_path)) {
     rowxfactor = bc@info$rowxfactor
     factorxcol = bc@info$factoxcol
     png(paste0(clust_path_plot, "_rowxfactor.png", sep=""), height=500*2, width=600*2)
@@ -147,7 +150,11 @@ a = foreach(clust_path=clust_paths) %dopar% {
   ## pretty heatmap
   
   # get original feature matrix and meta file
-  mm = get_feat_matrix(fileNames(clust_path), feat_dir, mc, meta_file, id_col, target_col, control, order_cols, good_count, good_sample)
+  # mm = get_feat_matrix(fileNames(clust_path), feat_dir, mc, meta_file, id_col, target_col, control, order_cols, good_count, good_sample)
+  # m = mm$m
+  # sm = mm$sm
+  # sm = meta_file[match(m,eta_file[,id_col]),target_col]
+  mm = get_feat_matrix2(fileNames(clust_path), feat_dir, meta_file=NULL, id_col=id_col, names(rowclust), names(colclust), getcsv=readcsv)
   m = mm$m
   sm = mm$sm
   
@@ -237,6 +244,8 @@ a = foreach(clust_path=clust_paths) %dopar% {
   # })
   # graphics.off()
   
+  
+  ## plot heatmaps
   tryCatch ({
     png(paste0(clust_path_plot, "_heatmap0.png", sep=""), height=plot_size_bar[1], width=plot_size_bar[2])
     par(mar=c(5,3,6,5))
@@ -250,11 +259,14 @@ a = foreach(clust_path=clust_paths) %dopar% {
     par(mar=c(25,50,20,50))
     par(mfrow=rep(rowcolno,2))
     for (BCi in 1:bc@Number) {
-        drawHeatmap(as.matrix(m),bc,BCi,plotAll=T)
+      drawHeatmap(as.matrix(m),bc,BCi,plotAll=T)
     }
     graphics.off()
   }, error = function(err) { cat(paste("heatmap error:  ",err)); return(T) })
   
+  
+  
+  ## plot row clusters against different sample attributes
   tryCatch({
     
     for (attri in attributes) {
@@ -309,6 +321,7 @@ a = foreach(clust_path=clust_paths) %dopar% {
 }
 
 TimeOutput(start)
+
 
 
 
