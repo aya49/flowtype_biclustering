@@ -2,15 +2,9 @@
 # aya43@sfu.ca 20180328
 
 ## root directory
-root = "~/projects/IMPC"
+root = "~/projects/flowCAP-II"
+result_dir = "result"; suppressWarnings(dir.create (result_dir))
 setwd(root)
-
-panelL = c("P1")
-centreL = c("Sanger_SPLEEN")#,"Sanger_MLN","CIPHE","TCP","H")
-controlL = c("+_+|+_Y","+_+|+_Y","WildType","WildType","WildType") #control value in target_col column
-ci = 1; panel = panelL[ci]; centre = centreL[ci]
-
-result_dir = paste0("result/", panelL, "/", centreL); suppressWarnings(dir.create (result_dir))
 
 ## input directories
 meta_dir = paste0(result_dir,"/meta")
@@ -20,11 +14,12 @@ feat_dir = paste(result_dir, "/feat", sep="")
 ## output directories
 biclust_dir = paste(result_dir,  "/biclust", sep=""); dir.create (biclust_dir,showWarnings=F)
 biclust_source_dir = paste(biclust_dir,  "/source", sep=""); dir.create (biclust_source_dir,showWarnings=F)
-biclust_score_dir = paste(biclust_dir,  "/score", sep="")
+biclust_score_dir = paste(biclust_dir,  "/score", sep=""); dir.create (biclust_score_dir,showWarnings=F)
 
 
 ## libraries
 library(biclust)
+library(clues)
 library(NMF)
 library(pheatmap)
 library(foreach)
@@ -35,7 +30,7 @@ source("~/projects/IMPC/code/_funcdist.R")
 source("~/projects/IMPC/code/_bayesianbiclustering.R")
 
 #Setup Cores
-no_cores = detectCores()-3
+no_cores = 3#detectCores()-3
 registerDoMC(no_cores)
 
 
@@ -46,13 +41,15 @@ registerDoMC(no_cores)
 
 
 ## options for script
-attributes = c("gene","gender","date")
+readcsv = T
 
-control = str_split(controlL,"[|]")[[1]]
-time_col = "date"
+attributes = c("aml")
+
+control = "normal" #control value in target_col column for each centre
 id_col = "fileName"
-target_col = "gene"
-order_cols = c("barcode","sample","specimen","date")
+target_col = "aml"
+order_cols = c("specimen","aml")
+split_col = "tube"
 
 # bcmethods = c("plaid","CC","bimax","BB-binary","nmf-nsNMF","nmf-lee","nmf-brunet","CC")
 # onlysigBB = T #only evaluate significant BB-binary clusters
@@ -63,7 +60,7 @@ order_cols = c("barcode","sample","specimen","date")
 
 #data paths
 clust_paths = list.files(path=biclust_source_dir,pattern=".Rdata", full.names=T)
-# list.files(path=clust_source_dir,pattern=".Rdata", full.names=T))
+                     # list.files(path=clust_source_dir,pattern=".Rdata", full.names=T))
 clust_paths = gsub(".Rdata","",clust_paths)
 feat_count = "file-cell-countAdj"
 
@@ -85,11 +82,17 @@ feat_count = "file-cell-countAdj"
 start = Sys.time()
 
 
-mc = get(load(paste0(feat_dir,"/", feat_count,".Rdata")))
-meta_file = get(load(paste0(meta_file_dir,".Rdata")))
+if (readcsv) {
+  mc = read.csv(paste0(feat_dir,"/", feat_count,".csv"),row.names=1, check.names=F)
+  meta_file = read.csv(paste0(meta_file_dir,".csv"),check.names=F)
+} else {
+  mc = get(load(paste0(feat_dir,"/", feat_count,".Rdata")))
+  meta_file = get(load(paste0(meta_file_dir,".Rdata")))
+}
 
 score_list = foreach(clust_path=clust_paths) %dopar% {
-  cat("\n", clust_path, " ",sep="")
+  tryCatch ({
+    cat("\n", clust_path, " ",sep="")
   start2 = Sys.time()
   
   ## prep clusters / label
@@ -109,9 +112,10 @@ score_list = foreach(clust_path=clust_paths) %dopar% {
   names(rowlabel) = rownames(rowlabel0)
   
   if (length(unique(rowclust))==1) {
-    rowclust_df = matrix(rep(1,length(rowclust)),ncol=1)
-    rownames(rowclust_df) = names(rowclust)
-    colnames(rowclust_df) = rowclust[1]
+    return(NA)
+    # rowclust_df = matrix(rep(1,length(rowclust)),ncol=1)
+    # rownames(rowclust_df) = names(rowclust)
+    # colnames(rowclust_df) = rowclust[1]
   } else {
     rowclust_df = model.matrix(~ factor(rowclust) - 1); colnames(rowclust_df) = sort(unique(rowclust)); rownames(rowclust_df) = names(rowclust)
   }
@@ -177,9 +181,10 @@ score_list = foreach(clust_path=clust_paths) %dopar% {
   # names(score) = paste0(names(score),"_1")
   # fm[[colnam]][[dindname]][[cltype]][[par]] = append(fm[[colnam]][[dindname]][[cltype]][[par]], score)
   
-  write.csv(score,file=paste0(biclust_score_dir, "/", clust_path, "_score.csv"))
-  return(score)
+  # write.csv(score,file=paste0(biclust_score_dir, "/", clust_path, "_score.csv"))
   TimeOutput(start2)
+  }, error = function(err) { cat(paste("error:  ",err)); return(NA) })
+  return(unlist(score))
 }
 
 
@@ -198,10 +203,11 @@ score_list = foreach(clust_path=clust_paths) %dopar% {
 
 
 
+## put scores into a table
+error_ind = is.na(score_list)
+score_table = Reduce("rbind",score_list[!error_ind])
 
-score_table = Reduce("rbind",score_list)
-
-clust_files = fileNames(clust_paths)
+clust_files = fileNames(clust_paths[!error_ind])
 clust_files_attr = str_split(clust_files,"_")
 clust_files_table = t(sapply(clust_files_attr, function(x) 
   c(x[1], x[2], str_split(x[3],"-")[[1]][2], gsub("layer","",x[4]), str_split(x[5],"-")[[1]][2])
@@ -213,6 +219,8 @@ write.csv(clust_files_table_final, file = paste0(biclust_score_dir,".csv"))
 
 
 TimeOutput(start)
+
+
 
 
 
