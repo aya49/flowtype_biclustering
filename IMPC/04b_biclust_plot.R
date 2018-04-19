@@ -2,9 +2,15 @@
 # aya43@sfu.ca 20180328
 
 ## root directory
-root = "~/projects/flowCAP-II"
-result_dir = "result"; suppressWarnings(dir.create (result_dir))
+root = "~/projects/IMPC"
 setwd(root)
+
+panelL = c("P1")
+centreL = c("Sanger_SPLEEN")#,"Sanger_MLN","CIPHE","TCP","H")
+controlL = c("+_+|+_Y","+_+|+_Y","WildType","WildType","WildType") #control value in target_col column
+ci = 1; panel = panelL[ci]; centre = centreL[ci]
+
+result_dir = paste0("result/", panelL, "/", centreL); suppressWarnings(dir.create (result_dir))
 
 ## input directories
 meta_dir = paste0(result_dir,"/meta")
@@ -29,7 +35,7 @@ source("~/projects/IMPC/code/_funcdist.R")
 source("~/projects/IMPC/code/_bayesianbiclustering.R")
 
 #Setup Cores
-no_cores = 3#detectCores()-3
+no_cores = detectCores()-3
 registerDoMC(no_cores)
 
 
@@ -40,28 +46,25 @@ registerDoMC(no_cores)
 
 
 ## options for script
-options(stringsAsFactors=FALSE)
-# options(device="cairo")
-options(na.rm=T)
-
 readcsv = T
 
-readcsv = T #read features as csv or Rdata
 overwrite = T #overwrite biclust?
-# writecsv = F
+writecsv = F
 
-good_count = 3 #trim matrix; only keep col/rows that meet criteria for more than 3 elements
-good_sample = 3 #trim matrix; only keep rows that are a part of a class with more than 3 samples
+good_count = 3
+good_sample = 3
+
 
 plot_size = c(500,500)
 plot_size_bar = c(1300,2000)
-attributes = c("aml") #interested attribute to plot
+attributes = c("gene","gender","date") #interested attribute to plot
 
-control = "normal" #control value in target_col column for each centre
+control = str_split(controlL,"[|]")[[1]]
+time_col = "date"
 id_col = "fileName"
-target_col = "aml"
-order_cols = c("specimen","aml")
-split_col = "tube"
+target_col = "gene"
+order_cols = c("barcode","sample","specimen","date")
+split_col = NULL
 
 # bcmethods = c("plaid","CC","bimax","BB-binary","nmf-nsNMF","nmf-lee","nmf-brunet","CC")
 # onlysigBB = T #only evaluate significant BB-binary clusters
@@ -94,6 +97,7 @@ feat_count = "file-cell-countAdj"
 start = Sys.time()
 
 
+
 if (readcsv) {
   mc = read.csv(paste0(feat_dir,"/", feat_count,".csv"),row.names=1, check.names=F)
   meta_file = read.csv(paste0(meta_file_dir,".csv"),check.names=F)
@@ -102,275 +106,219 @@ if (readcsv) {
   meta_file = get(load(paste0(meta_file_dir,".Rdata")))
 }
 
-a = foreach(feat_type=feat_types) %dopar% {
+a = foreach(clust_path=clust_paths) %dopar% {
+  cat("\n", clust_path, " ",sep="")
+  start2 = Sys.time()
+  
+  ## prep clusters / label
+  bc0 = get(load(paste0(clust_path,".Rdata")))
+  bc = bc0$source
+  if (is.null(bc0)) next
+  if (bc@Number == 0) next
+  rowclust = bc0$rowclust
+  colclust = bc0$colclust
+  
+  # score = score0 = read.csv(paste0(clust_path,"_score.csv"), row.names=1)
+  # score = score[,1]
+  # names(score) = rownames(score0)
+  
+  
+  
+  
+  
+  
+  ## plot ---------------------------------
+  clust_path_plot = gsub(biclust_source_dir,biclust_plot_dir,clust_path)
+  
+  ## nmf special plot to see factors if needed
+  if (grepl("nmf|GrNMF|fabia",clust_path)) {
+    rowxfactor = bc@info$rowxfactor
+    factorxcol = bc@info$factoxcol
+    png(paste0(clust_path_plot, "_rowxfactor.png", sep=""), height=500*2, width=600*2)
+    par(mfrow=c(2,2))
+    plot(sort(rowxfactor[,1]),type="l", main="contribution of rows to each factor; each line = factor" )
+    for (fi in 2:ncol(rowxfactor)) {
+      lines(sort(rowxfactor[,fi]))
+    }
+    plot(sort(factorxcol[1,]),type="l", main="contribution of cols to each factor; each line = factor" )
+    for (fi in 2:nrow(factorxcol)) {
+      lines(sort(factorxcol[fi,]))
+    }
+    
+    aheatmap(rowxfactor, main="row x factor")
+    aheatmap(factorxcol, main="factor x col")
+    graphics.off()
+  }
+  
+  
+  
+  ## pretty heatmap
+  
+  # get original feature matrix and meta file
+  mm = get_feat_matrix(fileNames(clust_path), feat_dir, mc, meta_file, id_col, target_col, control, order_cols, good_count, good_sample)
+  m = mm$m
+  sm = mm$sm
+  
+  # prepare col/row annotation
+  if (grepl("BB-binary",clust_path)) {
+    colcluster_temp = bc@info$patient.clusters
+    rowcluster_temp = bc@info$transcript.clusters
+    colcluster_temp[!colcluster_temp%in%bc0$colclust] = 0
+    rowcluster_temp[!rowcluster_temp%in%bc0$rowclust] = 0
+  } else {
+    colcluster_temp = unlist(apply(bc@NumberxCol, 2, function(x) {
+      clust = which(x)
+      if (length(clust) == 0) return(0)
+      return(max(clust))
+    }))
+    rowcluster_temp = unlist(apply(bc@RowxNumber, 1, function(x) {
+      clust = which(x)
+      if (length(clust) == 0) return(0)
+      return(max(clust))
+    }))
+  }
+  
+  
+  # plot
+  tryCatch ({
+    for (attribute in attributes) {
+      
+      col_annot = data.frame(colcluster=factor(colcluster_temp))
+      row_annot = data.frame(rowcluster=factor(rowcluster_temp), class=factor(sm[,attribute]))
+      rownames(col_annot)=names(colclust)
+      
+      row_order = order(row_annot$rowcluster, decreasing=T)
+      col_order = order(col_annot$colcluster, decreasing=T)
+      annotation_row = row_annot[row_order,]
+      annotation_col = data.frame(col_annot[col_order,])
+      
+      mh = as.matrix(m)[row_order,col_order]
+      rownames(mh) = 1:nrow(mh)
+      rownames(annotation_col) = colnames(mh)
+      rownames(annotation_row) = 1:nrow(mh)
+      
+      pheatmap(mh, main=paste0(attribute),#,"; precision, recall, f measure comembership:\n",paste0(c(f1$p,f1$r,f1$f_comember),collapse=", ")),
+               annotation_row = annotation_row, annotation_col = annotation_col,
+               show_rownames = F, 
+               show_colnames=F,
+               cluster_cols = T, cluster_rows = F,
+               # cellwidth = 3, cellheight = 3, 
+               # fontsize = 3, 
+               filename = paste0(clust_path_plot, "_pheatmap-",attribute,"-sorted.pdf"))
+      pheatmap(mh, main=paste0(attribute),#,"; precision, recall, f measure comembership:\n",paste0(c(f1$p,f1$r,f1$f_comember),collapse=", ")),
+               annotation_row = annotation_row, annotation_col = annotation_col,
+               show_rownames = F, 
+               show_colnames=F,
+               cluster_cols = F, cluster_rows = F,
+               # cellwidth = 3, cellheight = 3, 
+               # fontsize = 3, 
+               filename = paste0(clust_path_plot, "_pheatmap-",attribute,"-sorted.png"))
+      
+      pheatmap(mh, main=paste0(attribute),#,"; precision, recall, f measure comembership:\n",paste0(c(f1$p,f1$r,f1$f_comember),collapse=", ")),
+               annotation_row = annotation_row, annotation_col = annotation_col,
+               show_rownames = F, 
+               # show_colnames=F,
+               cluster_cols = F, cluster_rows = F,
+               # cellwidth = 3, cellheight = 3, 
+               fontsize = 3, 
+               filename = paste0(clust_path_plot, "_pheatmap-",attribute,"-sorted-smallfont.pdf"))
+    }
+  }, error = function(err) { cat(paste("pheatmap error:  ",err)); return(T) })
+  # # Specifying clustering from distance matrix
+  # drows = dist(test, method = "minkowski")
+  # dcols = dist(t(test), method = "minkowski")
+  # pheatmap(test, clustering_distance_rows = drows, clustering_distance_cols = dcols)
+  
+  
+  
+  # png(paste0(clust_path_plot, "_bar.png", sep=""), height=plot_size_bar[1], width=plot_size_bar[2])
+  # par(mar=c(2,6,3,2))
+  # try({
+  #   plotclust(bc,as.matrix(m))
+  # })
+  # graphics.off()
+  
+  # png(paste0(clust_path_plot, "_bubble.png", sep=""), height=plot_size_bar[1], width=plot_size_bar[2])
+  # par(mar=c(20,20,20,20))
+  # try({
+  #   bubbleplot(as.matrix(m),bc)
+  # })
+  # graphics.off()
+  
+  
+  ## plot heatmaps
+  tryCatch ({
+    png(paste0(clust_path_plot, "_heatmap0.png", sep=""), height=plot_size_bar[1], width=plot_size_bar[2])
+    par(mar=c(5,3,6,5))
+    try({
+      heatmapBC(as.matrix(m),bc, order=T, local=T, outside=T)
+    })
+    graphics.off()
+    
+    rowcolno = ceiling(sqrt(bc@Number))
+    png(paste0(clust_path_plot, "_heatmap.png", sep=""), height=plot_size[1]*rowcolno, width=plot_size[2]*rowcolno)
+    par(mar=c(25,50,20,50))
+    par(mfrow=rep(rowcolno,2))
+    for (BCi in 1:bc@Number) {
+      drawHeatmap(as.matrix(m),bc,BCi,plotAll=T)
+    }
+    graphics.off()
+  }, error = function(err) { cat(paste("heatmap error:  ",err)); return(T) })
+  
+  
+  
+  ## plot row clusters against different sample attributes
   tryCatch({
-    cat("\n", feat_type, " ",sep="")
-    start2 = Sys.time()
     
-    ## upload and prep feature matrix
-    if (readcsv) {
-      m0 = as.matrix(read.csv(paste0(feat_dir,"/", feat_type,".csv"),row.names=1, check.names=F))
-    } else {
-      m0 = as.matrix(get(load(paste0(feat_dir,"/", feat_type,".Rdata"))))
-    }
-    if (!rownames(m0)[1]%in%meta_file[,id_col]) {
-      cat("\nskipped: ",feat_type,", matrix rownames must match fileName column in meta_file","\n", sep="")
-    }
-    
-    ## does feature matrix have cell populations on column names?
-    layers = 0
-    countThres = 0
-    colhascell = ifelse(str_split(feat_type,"-")[[1]][2]=="cell",T,F)
-    if (colhascell) {
-      layers = c(1,2,4,max(unique(sapply(unlist(str_split(colnames(m0),"_")[[1]]), function(x) str_count(x,"[+-]")))))
-      countThres = cellCountThres
-    }
-    
-    ## for each layer, trim feature matrix accordingly
-    for (k in layers) {
-      #trim matrix
-      mm = trimMatrix(m0,TRIM=T, mc=mc, sampleMeta=meta_file, sampleMeta_to_m1_col=id_col, target_col=target_col, control=control, order_cols=order_cols, colsplitlen=NULL, k=k, countThres=countThres, goodcount=good_count, good_sample=good_sample)
-      if (is.null(mm)) next
-      m_ordered = mm$m
-      meta_file_ordered = mm$sm
-      if (is.null(mm)) next
-      
-      ## split up analysis of feature matrix rows by split_col
-      if (is.null(split_col)) {
-        split_ind = list(all = 1:nrow(meta_file_ordered))
-      } else {
-        split_ids = unique(meta_file_ordered[,split_col])
-        split_ids = split_ids[!is.na(split_ids)]
-        split_ind = lapply(split_ids, function(split_id) which(meta_file_ordered[,split_col]==split_id) )
-        names(split_ind) = split_ids
+    for (attri in attributes) {
+      # png(paste0(clust_path_plot, "_stats_",attri,".png", sep=""), height=plot_size[1]*rowcolno, width=plot_size[2]*rowcolno)
+      # par(mar=c(10,5,3,2), mfrow=rep(rowcolno,2))
+      attri_valuesL = list()
+      attri_topics = c()
+      for (BCi in 1:bc@Number) {
+        attri_values = sm[bc@RowxNumber[,BCi],attri]
+        attri_valuesL[[BCi]] = attri_valuesT = table(attri_values)
+        attri_topics = union(attri_topics,names(attri_valuesT))
+        # try({
+        #   barplot(attri_valuesT, las=2, xlab=attri, ylab="# of samples in bicluster with attribute on x axis", main=paste0(length(attri_values)," samples in bicluster ", BCi))
+        # })
       }
+      # graphics.off()
       
-      for (tube in names(split_ind)) {
-        m = m_ordered[split_ind[[tube]],]
-        if (!sum(m_ordered!=0)>0) next
-        sm = meta_file_ordered_split = meta_file_ordered[split_ind[[tube]],]
-        if (length(unique(sm[,target_col]))<=1) next
-        
-        ## for each biclustering method
-        for (bcmethod in bcmethods) { #requires binary matrix
-          if (bcmethod=="BB-binary" & !grepl("pval[A-z]*TRIM",feat_type)) next
-          
-          # where to save biclustering
-          bcname0 = paste("/",bcmethod, "_", feat_type, "_splitby-",split_col,".", tube, "_layer", str_pad(k, 2, pad = "0"), "_countThres-", countThres, sep = "")
-          bcname = paste0(biclust_source_dir, bcname0)
-          
-          # bicluster
-          if (overwrite | !file.exists(paste0(bcname,".Rdata"))) {
-            if (bcmethod == "plaid") bc = biclust(as.matrix(m), method=BCPlaid(), row.release=.3,col.release=.7, back.fit=10, verbose = F)
-            if (bcmethod == "CC") bc = biclust(as.matrix(m), method=BCCC(), number=Kr)
-            if (bcmethod == "Xmotifs") bc = biclust(as.matrix(m), method=BCXmotifs(), number=Kr, ns=50, nd=500, alpha=10)
-            if (bcmethod == "spectral") bc = biclust(as.matrix(m), method=BCSpectral(), numberOfEigenvalues=10)
-            if (bcmethod == "bimax") bc = biclust(as.matrix(m), method=BCBimax(),number=Kr)
-            if (bcmethod == "quest") bc = biclust(as.matrix(m), method=BCQuest(), number=Kr, ns=50)
-            if (bc@Number==0) next
-            
-            # GrNMF (mf)
-            if (grepl("GrNMF",bcmethod) & colhascell & !grepl("_",colnames(m)[1])) {
-              #build binary relation graph between features
-              cellpops = colnames(m)
-              medge = matrix(0,nrow=length(cellpops),ncol=length(cellpops))
-              for (cellpop_ind in 1:ncol(m)) {
-                cellpop = colnames(m)[cellpop_ind]
-                cind = which(names(meta_cell_child_names)==cellpop)
-                if (length(cind)==0) next
-                children = meta_cell_child_names[[cind]]
-                children_ind = colnames(m) %in% unlist(children)
-                medge[cellpop_ind,children_ind] = medge[children_ind,cellpop_ind] = 1
-              }
-              # medge = Matrix(medge,sparse=T)
-              # bicluster
-              bcb = grnmf(t(m), medge, k=Kr, lambda_multiple=as.numeric(str_split(bcmethod,"-")[[1]][2]), n_iter=max(ncol(m),1000), converge=1e-06, dynamic_lambda=T)
-              # bcb = grnmf(t(m), medge, k=Kr, lambda_multiple=1, n_iter=1000, converge=1e-06, dynamic_lambda=T)
-              bcb$rowxfactor = bcb$V
-              bcb$factorxcol = t(bcb$U)
-            }
-            
-            bcb = NULL
-            
-            # fabia (mf)
-            if (bcmethod == "fabia") {
-              bcb = fabia(as.matrix(abs(m)), p=Kr,alpha=0.01,cyc=max(ncol(m),1000),spl=0,spz=0.5,non_negative=0,random=1.0,center=2,norm=1,scale=0.0,lap=1.0,nL=0,lL=0,bL=0)
-              bcb$rowxfactor = bcb@L; if(all(bcb$rowxfactor==0)) next
-              bcb$factorxcol = bcb@Z
-            }
-            
-            # NMF (mf)
-            tryCatch({
-              if (grepl("nmf",bcmethod)) {
-                bcb = nmf(as.matrix(abs(m)), rank=Kr, method=str_split(bcmethod,"-")[[1]][2])#, nrun=10, method=list("lee", "brunet", "nsNMF"))
-                bcb$rowxfactor = basis(bcb)
-                bcb$factorxcol = coef(bcb)
-              } 
-            }, error = function(err) { cat(paste("nmf error:  ",err)); bcb = NULL })
-            
-            
-            
-            
-            
-            
-            # adjust format of biclustering to match output of biclust()
-            if (grepl("nmf|GrNMF|fabia",bcmethod)) {
-              if (is.null(bcb)) next
-              
-              # threshold to determine significant bicluster
-              rthres = quantile(bcb$rowxfactor,qthres)
-              cthres = quantile(bcb$factorxcol,qthres)
-              
-              # get the framework of biclust output to put nmf output into
-              bc = biclust(array(0,dim=c(2,2)), method=BCPlaid()) #get the framwork
-              bc@RowxNumber = array(F, dim=dim(bcb$rowxfactor)) 
-              for(ri in 1:nrow(bcb$rowxfactor)) {
-                mi = which.max(bcb$rowxfactor[ri,])
-                if (max(bcb$rowxfactor[ri,])>rthres) bc@RowxNumber[ri,mi] = T
-              }
-              bc@NumberxCol = array(F, dim=dim(bcb$factorxcol)) 
-              for(ri in 1:ncol(bcb$factorxcol)) {
-                mi = which.max(bcb$factorxcol[,ri])
-                if (max(bcb$factorxcol[,ri])>cthres) bc@NumberxCol[mi,ri] = T
-                
-                bc@Number = nrow(bcb$factorxcol)
-                
-                bc@info = list(rowxfactor=bcb$rowxfactor,factoxcol=bcb$factorxcol)
-              } 
-            }
-            
-            
-            if (bcmethod == "BB-binary") {
-              # create binary matrix as input into BB-binary
-              mbinary = m
-              mbinary[mbinary != 0] = 1 #make matrix binary (for p values TRIM only)
-              bcb = B2PS(as.matrix(mbinary), sideData=NULL, Kt=Kr, Kp=Kc, iterations=max(ncol(mbinary)/20,min_iter), alpha_p = 1, alpha_t = 1, alpha_e = 1, alpha_sd = 1)
-              # THETA is trasnposed!
-              bcb$theta = t(bcb$Theta[,,2])
-              
-              # get significant biclusters only
-              theta = bcb$theta
-              theta = theta[sort(unique(bcb$transcript.clusters)),sort(unique(bcb$patient.clusters))]
-              bcb$p = array(1,dim = c(nrow(bcb$theta), ncol(bcb$theta)))
-              for (i in unique(bcb$transcript.clusters)) {
-                for (j in unique(bcb$patient.clusters)) {
-                  bcb$p[i,j] = t.test.single(as.vector(theta),bcb$theta[i,j])
-                  if (is.na(bcb$p[i,j])) bcb$p[i,j] = 1
-                }
-              }
-              
-              # adjust format of biclustering to match output of biclust()
-              bc = biclust(array(0,dim=c(2,2)), method=BCPlaid())
-              bc@info = bcb
-              if (onlysigBB) {
-                bc@info$cid = cid = which(bcb$p<pval_thres, arr.ind=T)
-                if (nrow(cid) == 0) {
-                  if (length(theta)>=6 & !all(bcb$p==1)) {
-                    bc@info$cid = cid = which(bcb$p<=sort(bcb$p)[4], arr.ind=T)
-                  } else {
-                    # save(NULL, file=paste0(bcname,".Rdata"))
-                    next
-                  }
-                }
-              } else {
-                bc@info$cid = cid = which(bcb$p<=1, arr.ind=T)
-              }
-              
-              # cidmatrix = data.frame(row=rep(0,nrow(cid)), col=rep(0,nrow(cid)))
-              # cidmatrix[cid] = 1
-              # bc@info$sigcluster = cidmatrix
-              bc@Number = nrow(cid)
-              bc@RowxNumber = array(F, dim=c(nrow(m),nrow(cid))); colnames(bc@RowxNumber) = rep(1,ncol(bc@RowxNumber))
-              bc@NumberxCol = array(F, dim=c(nrow(cid), ncol(m))); rownames(bc@NumberxCol) = rep(1,nrow(bc@NumberxCol))
-              for (i in 1:nrow(cid)) { #column = cluster
-                rowclust = cid[i,1]
-                colclust = cid[i,2]
-                colnames(bc@RowxNumber)[i] = rownames(bc@NumberxCol)[i] = bcb$p[rowclust,colclust]
-                rows = bcb$transcript.clusters==rowclust
-                cols = bcb$patient.clusters==colclust
-                bc@RowxNumber[rows, i] = T
-                bc@NumberxCol[i, cols] = T
-                # cat("\n", sum(bcb$transcript.clusters==rowclust), ", ", sum(bcb$patient.clusters==colclust), sep="")
-              }
-              rowclust = bc@info$transcript.clusters
-              colclust = bc@info$patient.clusters
-            }
-            
-            if (nrow(bc@RowxNumber) != nrow(m) | ncol(bc@RowxNumber) != bc@Number) bc@RowxNumber = t(bc@RowxNumber)
-            if (ncol(bc@NumberxCol) != ncol(m) | nrow(bc@NumberxCol) != bc@Number) bc@NumberxCol = t(bc@NumberxCol)
-            
-            
-            
-            
-            
-            ## get & save clustering & labels!
-            
-            if (bcmethod != "BB-binary") {
-              rowclust = rowxcluster_to_cluster(bc@RowxNumber)
-              colclust = clusterxcol_to_cluster(bc@NumberxCol)
-            } 
-            rowlabel = sm[,target_col]
-            
-            names(rowclust) = names(rowlabel) = rownames(m)
-            names(colclust) = colnames(m)
-            # f1 = f.measure.comembership(rowlabel,rowclust)
-            
-            # save biclustering
-            bc0 = list(source=bc,rowclust=rowclust,colclust=colclust,rowlabel=rowlabel)
-            save(bc0, file=paste0(bcname,".Rdata"))
-            write.csv(rowclust, file=paste0(bcname,"_rowclust.csv"))
-            write.csv(colclust, file=paste0(bcname,"_colclust.csv"))
-            write.csv(rowlabel, file=paste0(bcname,"_rowlabel.csv"))
-            
-            # #save row/col as csv
-            # try({
-            #   bcgene = bc@RowxNumber; rownames(bcgene) = sm[,attributes[1]]
-            #   bcgene = bcgene[apply(bcgene, 1, function(x) all(!x)),]
-            #   write.csv(bcgene,file=paste0(bcname,"_row.csv"))
-            # })
-            # try ({
-            #   bccol = bc@NumberxCol
-            #   if (ncol(bccol)==bc@Number) bccol = t(bccol)
-            #   colnames(bccol) = colnames(m)
-            #   bccol = bccol[,apply(bccol, 2, function(x) all(!x))]
-            #   write.csv(bccol,file=paste0(bcname,"_col.csv"))
-            # })
-            
-          }
-          
-          # #temporary
-          # if (nrow(bc@RowxNumber) != nrow(m) | ncol(bc@RowxNumber) != bc@Number) bc@RowxNumber = t(bc@RowxNumber)
-          # if (ncol(bc@NumberxCol) != ncol(m) | nrow(bc@NumberxCol) != bc@Number) bc@NumberxCol = t(bc@NumberxCol)
-          # if (is.null(bc0$rowclust) & bcmethod!="BB-binary") bc0$rowclust = rowxcluster_to_cluster(bc@RowxNumber)
-          # try({
-          #   # get hard clustering; put samples into larger cluster
-          #   la = as.numeric(factor(sm[,target_col]))
-          #   if (bcmethod=="BB-binary") {
-          #     cl = bc0$rowclust = bc@info$transcript.clusters
-          #   } else {
-          #     cl = bc0$rowclust
-          #   }
-          #   bc@info$f1 = f.measure.comembership(la,cl)
-          # })
-          # save(bc, file=paste0(bcname,".Rdata")); if (writecsv) write.csv(as.matrix(bc), file=paste0(checkm(bc,bcname),".Rdata"))
-          
-          # rowlabel = as.numeric(factor(sm[,target_col]))
-          
-          # }
-          
-        }
-        
-        
-      } 
-    } #layer
-    TimeOutput(start2)
-  }, error = function(err) { cat(paste("ERROR:  ",err)); return(T) })
-  return(F)
+      attri_topics = sort(attri_topics)
+      attri_valuesM = sapply(attri_valuesL, function(x) {
+        sapply(attri_topics, function(y) {
+          if (y %in% names(x)) return (x[y])
+          return (0)
+        })
+      })
+      attri_valuesM = t(attri_valuesM)
+      if (all(colnames(attri_valuesM)==colnames(attri_valuesM)[1])) attri_valuesM = t(attri_valuesM)
+      colnames(attri_valuesM) = attri_topics
+      rownames(attri_valuesM) = c(1:nrow(attri_valuesM))
+      avm = attri_valuesM/20
+      
+      png(paste0(clust_path_plot, "_stats_",attri,"_vs.png", sep=""), height=plot_size[1], width=plot_size[2])
+      par(mar=c(10,5,5,8), xpd=TRUE)
+      
+      colour = rainbow(ncol(attri_valuesM))
+      barplot(t(attri_valuesM), xlab="bicluster",ylab="# of samples", col=colour, main=paste0("# of samples in biclusters with attribute of ",attri,"\n",attribute))#,"; precision, recall, f measure comembership:\n",paste0(c(f1$p,f1$r,f1$f_comember),collapse=", ")))
+      legend("topright",legend=colnames(attri_valuesM),fill=colour,inset=c(-.2,0))
+      # plot(row(avm), col(avm),
+      #   cex=avm,
+      #   xlim=c(0.5,nrow(avm)+0.5), ylim=c(0.5,ncol(avm)+0.5),
+      #   axes=FALSE, ann=FALSE
+      # )
+      # text(row(avm), col(avm), paste0(attri_valuesM, "\nsamples"), col="brown", pos=3)
+      # axis(1,at=1:nrow(avm),labels=rownames(avm),cex.axis=0.8)
+      # axis(2,at=1:ncol(avm),labels=colnames(avm),cex.axis=0.8)
+      # title(xlab="bicluster",ylab=attri)
+      # box()
+      graphics.off()
+    }
+  }, error = function(err) { cat(paste("attribute plot error:  ",err)); return(T) })
+  
+  TimeOutput(start2)
 }
 
 TimeOutput(start)
-
-
-
-
-

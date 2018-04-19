@@ -1,10 +1,16 @@
-## Input: original features --> Output: biclusters
+## Input: original features --> Output: bicluster & plots
 # aya43@sfu.ca 20161220
 
 ## root directory
-root = "~/projects/flowCAP-II"
-result_dir = "result"; suppressWarnings(dir.create (result_dir))
+root = "~/projects/IMPC"
 setwd(root)
+
+panelL = c("P1")
+centreL = c("Sanger_SPLEEN")#,"Sanger_MLN","CIPHE","TCP","H")
+controlL = c("+_+|+_Y","+_+|+_Y","WildType","WildType","WildType") #control value in target_col column
+ci = 1; panel = panelL[ci]; centre = centreL[ci]
+
+result_dir = paste0("result/", panelL, "/", centreL); suppressWarnings(dir.create (result_dir))
 
 ## input directories
 meta_dir = paste0(result_dir,"/meta") # meta files directory
@@ -24,13 +30,12 @@ library(pheatmap)
 library(foreach)
 library(doMC)
 library(stringr)
-library(Matrix)
 source("~/projects/IMPC/code/_funcAlice.R")
 source("~/projects/IMPC/code/_funcdist.R")
 source("~/projects/IMPC/code/_bayesianbiclustering.R")
 
-## setup Cores for parallel processing (parallelized for each feature)
-no_cores = 3#detectCores()-3
+#Setup Cores
+no_cores = 10#detectCores()-3
 registerDoMC(no_cores)
 
 
@@ -52,13 +57,12 @@ overwrite = T #overwrite biclust?
 good_count = 3 #trim matrix; only keep col/rows that meet criteria for more than 3 elements
 good_sample = 3 #trim matrix; only keep rows that are a part of a class with more than 3 samples
 
-
-cellCountThres = c(2000) #a cell is insignificant if count under cell CountThres so delete -- only for matrices that have cell populations as column names
-target_col = "aml" #the interested column in meta_file
-control = "normal" #control value in target_col column
+cellCountThres = c(200) #a cell is insignificant if count under cell CountThres so delete -- only for matrices that have cell populations as column names
+target_col = "gene" #the interested column in meta_file
+control = str_split(controlL,"[|]")[[1]] #control value in target_col column
 id_col = "fileName" #the column in meta_file matching rownames in feature matrices
 order_cols = NULL #if matrix rows should be ordered by a certain column
-split_col = "tube" # if certain rows in matrices should be analyzed in isolation, split matrix by this column in meta_file
+split_col = NULL # if certain rows in matrices should be analyzed in isolation, split matrix by this column in meta_file
 
 bcmethods = c("plaid","CC","bimax","BB-binary","nmf-nsNMF","nmf-lee","nmf-brunet","CC","GrNMF-0","GrNMF-1","GrNMF-5","GrNMF-10") #biclustering methods; GrNMF-<weight of graph regularization>
 #,"quest", "CC", "spectral", "Xmotifs", have to change this manually in function...
@@ -175,6 +179,7 @@ a = foreach(feat_type=feat_types) %dopar% {
             if (bcmethod == "quest") bc = biclust(as.matrix(m), method=BCQuest(), number=Kr, ns=50)
             if (bc@Number==0) next
             
+            # GrNMF (mf)
             if (grepl("GrNMF",bcmethod) & colhascell & !grepl("_",colnames(m)[1])) {
               #build binary relation graph between features
               cellpops = colnames(m)
@@ -195,23 +200,23 @@ a = foreach(feat_type=feat_types) %dopar% {
               bcb$factorxcol = t(bcb$U)
             }
             
-            # unused
+            bcb = NULL
+            
+            # fabia (mf)
             if (bcmethod == "fabia") {
               bcb = fabia(as.matrix(abs(m)), p=Kr,alpha=0.01,cyc=max(ncol(m),1000),spl=0,spz=0.5,non_negative=0,random=1.0,center=2,norm=1,scale=0.0,lap=1.0,nL=0,lL=0,bL=0)
               bcb$rowxfactor = bcb@L; if(all(bcb$rowxfactor==0)) next
               bcb$factorxcol = bcb@Z
             }
             
+            # NMF (mf)
             tryCatch({
               if (grepl("nmf",bcmethod)) {
-                bcb = NULL
-                
                 bcb = nmf(as.matrix(abs(m)), rank=Kr, method=str_split(bcmethod,"-")[[1]][2])#, nrun=10, method=list("lee", "brunet", "nsNMF"))
                 bcb$rowxfactor = basis(bcb)
                 bcb$factorxcol = coef(bcb)
               } 
             }, error = function(err) { cat(paste("nmf error:  ",err)); bcb = NULL })
-            if (is.null(bcb)) next
             
             
             
@@ -220,6 +225,8 @@ a = foreach(feat_type=feat_types) %dopar% {
             
             # adjust format of biclustering to match output of biclust()
             if (grepl("nmf|GrNMF|fabia",bcmethod)) {
+              if (is.null(bcb)) next
+              
               # threshold to determine significant bicluster
               rthres = quantile(bcb$rowxfactor,qthres)
               cthres = quantile(bcb$factorxcol,qthres)
@@ -375,7 +382,6 @@ a = foreach(feat_type=feat_types) %dopar% {
 
 
 TimeOutput(start)
-
 
 
 

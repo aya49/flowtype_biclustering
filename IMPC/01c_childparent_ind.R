@@ -2,15 +2,21 @@
 #aya43@sfu.ca 20170131
 
 ## root directory
-root = "~/projects/flowCAP-II"
-result_dir = "result"; suppressWarnings(dir.create (result_dir))
+root = "~/projects/IMPC"
 setwd(root)
+
+panelL = c("P1")
+centreL = c("Sanger_SPLEEN")#,"Sanger_MLN","CIPHE","TCP","H")
+# controlL = c("+_+|+_Y","+_+|+_Y","WildType","WildType","WildType") #control value in target_col column
+ci = 1; panel = panelL[ci]; centre = centreL[ci]
+
+result_dir = paste0("result/", panelL, "/", centreL); suppressWarnings(dir.create (result_dir))
 
 
 
 ## input directories
 meta_dir = paste0(result_dir,"/meta")
-meta_cell_dir = paste(meta_dir, "/cell", sep="")
+meta_cell_dir = paste(meta_dir, "/cell.Rdata", sep="")
 
 ## output directories
 meta_cell_child_dir = paste(meta_dir, "/cell_child",sep="") #specifies a phenotypes children
@@ -48,7 +54,7 @@ options(device="cairo")
 options(na.rm=T)
 
 ## prepare data
-meta_cell = get(load(paste0(meta_cell_dir,".Rdata")))
+meta_cell = get(load(meta_cell_dir))
 # colnames(meta_cell) = c("phenotype","phenocode","phenolevel")
 # save(meta_cell,file=paste0(meta_cell_dir, pcp,".Rdata"))
 
@@ -111,7 +117,6 @@ save(meta_cell_parentpn_ind, file=paste0(meta_cell_parentpn_ind_dir, ".Rdata"))
 TimeOutput(start1)
 
 TimeOutput(start)
-
 
 
 
