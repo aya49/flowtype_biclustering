@@ -48,7 +48,7 @@ registerDoMC(no_cores)
 ## options for script
 
 
-readcsv = T
+readcsv = F
 
 control = str_split(controlL,"[|]")[[1]]
 time_col = "date"
@@ -88,10 +88,10 @@ start = Sys.time()
 
 
 if (readcsv) {
-  mc = read.csv(paste0(feat_dir,"/", feat_count,".csv"),row.names=1, check.names=F)
+  # mc = read.csv(paste0(feat_dir,"/", feat_count,".csv"),row.names=1, check.names=F)
   meta_file = read.csv(paste0(meta_file_dir,".csv"),check.names=F)
 } else {
-  mc = get(load(paste0(feat_dir,"/", feat_count,".Rdata")))
+  # mc = get(load(paste0(feat_dir,"/", feat_count,".Rdata")))
   meta_file = get(load(paste0(meta_file_dir,".Rdata")))
 }
 
@@ -103,8 +103,15 @@ score_list = foreach(clust_path=clust_paths) %dopar% {
     ## prep clusters / label
     rowclust = rowclust0 = read.csv(paste0(clust_path,"_rowclust.csv"), row.names=1)
     rowclust = rowclust[,1]; 
-    rowlabel = rowlabel0 = read.csv(paste0(clust_path,"_rowlabel.csv"), row.names=1)
-    rowlabel = rowlabel[,1]; 
+    names(rowclust) = rownames(rowclust0)
+    mm = get_feat_matrix2(clust_fileName=NULL, feat_dir=NULL, meta_file=meta_file, id_col=id_col, row_names=names(rowclust), col_names=NULL, getcsv=readcsv)
+    sm = mm$sm
+    rowlabel = sm[,target_col]
+    names(rowlabel) = names(rowclust)
+    # rowlabel = rowlabel0 = read.csv(paste0(clust_path,"_rowlabel.csv"), row.names=1)
+    # rowlabel = rowlabel[,1]; 
+    # names(rowlabel) = rownames(rowlabel0)
+    
     # rowclust1 = rep(NA,length(rowlabel)) #s.t. each cluster is labeled by what majority of its real contents
     # tubes0 = unique(rowclust)[order(table(rowclust))]
     # for (tubei in tubes0) {
@@ -113,8 +120,6 @@ score_list = foreach(clust_path=clust_paths) %dopar% {
     #   rowclust1[tci] = tubej ## MAJORITY IN 2+ classes?
     # }
     # names(rowclust) = names(rowclust1) = rownames(rowclust0)
-    names(rowclust) = rownames(rowclust0)
-    names(rowlabel) = rownames(rowlabel0)
     
     if (length(unique(rowclust))==1) {
       return(NA)

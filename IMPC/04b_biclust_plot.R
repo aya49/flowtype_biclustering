@@ -46,7 +46,7 @@ registerDoMC(no_cores)
 
 
 ## options for script
-readcsv = T
+readcsv = F
 
 overwrite = T #overwrite biclust?
 writecsv = F
@@ -110,7 +110,7 @@ a = foreach(clust_path=clust_paths) %dopar% {
   cat("\n", clust_path, " ",sep="")
   start2 = Sys.time()
   
-  ## prep clusters / label
+  ## prep clusters
   bc0 = get(load(paste0(clust_path,".Rdata")))
   bc = bc0$source
   if (is.null(bc0)) next
@@ -155,7 +155,11 @@ a = foreach(clust_path=clust_paths) %dopar% {
   ## pretty heatmap
   
   # get original feature matrix and meta file
-  mm = get_feat_matrix(fileNames(clust_path), feat_dir, mc, meta_file, id_col, target_col, control, order_cols, good_count, good_sample)
+  # mm = get_feat_matrix(fileNames(clust_path), feat_dir, mc, meta_file, id_col, target_col, control, order_cols, good_count, good_sample)
+  # m = mm$m
+  # sm = mm$sm
+  # sm = meta_file[match(m,eta_file[,id_col]),target_col]
+  mm = get_feat_matrix2(fileNames(clust_path), feat_dir, meta_file=NULL, names(rowclust), names(colclust), getcsv=readcsv)
   m = mm$m
   sm = mm$sm
   

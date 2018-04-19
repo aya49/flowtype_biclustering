@@ -151,7 +151,7 @@ for (feat_type in feat_types) {
   TimeOutput(start1)
   
   colnames(feat_file_cell_pvalFULLori) = colnames(feat_file_cell_logfoldFULL) = colnames(feat_file_cell_countAdjMaxFULL) = colnames(feat_file_cell_countAdjKOFULL) = colnames(m)
-  rownames(feat_file_cell_pvalFULLori) = rownames(feat_file_cell_logfoldFULL) = rownames(feat_file_cell_countAdjMaxFULL) = rownames(feat_file_cell_countAdjKOFULL) = ftKOGT
+  rownames(feat_file_cell_pvalFULLori) = rownames(feat_file_cell_logfoldFULL) = rownames(feat_file_cell_countAdjMaxFULL) = rownames(feat_file_cell_countAdjKOFULL) = rownames(m)
   
   save(feat_file_cell_countAdjMaxFULL, file=paste0(feat_file_cell_countAdjMax_dir, "FULL.", feat_type,".Rdata"))
   save(feat_file_cell_countAdjKOFULL, file=paste0(feat_file_cell_countAdjKO_dir,"FULL.",feat_type,".Rdata"))
@@ -177,13 +177,12 @@ for (feat_type in feat_types) {
     
     feat_file_cell_pval = feat_file_cell_pvalTRIM = feat_file_cell_pvalFULL[!trimRowIndex,!trimColIndex]
     save(feat_file_cell_pval, file=paste0(feat_file_cell_pval_dir, adj, ".", feat_type,".Rdata"))
-    
     if (writecsv) write.csv(feat_file_cell_pval, file=paste0(feat_file_cell_pval_dir, adj, ".", feat_type,".csv"), row.names=T)
     
     trimIndex = feat_file_cell_pval <= -log(pval_thres)
     
     feat_file_cell_pvalTRIM[trimIndex] = 0
-    if (writecsv) write.csv(as.matrix(feat_file_cell_pvalTRIM), file=paste0(feat_file_cell_pval_dir, adj, "TRIM.", feat_type,".csv"), row.names=T)
+    if (writecsv) write.csv(feat_file_cell_pvalTRIM, file=paste0(feat_file_cell_pval_dir, adj, "TRIM.", feat_type,".csv"), row.names=T)
     feat_file_cell_pvalTRIM = Matrix(feat_file_cell_pvalTRIM, sparse=T)
     save(feat_file_cell_pvalTRIM, file=paste0(feat_file_cell_pval_dir, adj, "TRIM.", feat_type,".Rdata"))
     
@@ -205,7 +204,7 @@ for (feat_type in feat_types) {
     }
     
   }
-
+  
   TimeOutput(start1)
   
   
@@ -213,6 +212,7 @@ for (feat_type in feat_types) {
 }
 
 cat("\nTime taken to calculate p values & barcode matrices is: ",TimeOutput(start), "\n", sep="") #3iTcell ~40min
+
 
 
 

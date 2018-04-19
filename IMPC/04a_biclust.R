@@ -50,7 +50,7 @@ options(stringsAsFactors=FALSE)
 # options(device="cairo")
 options(na.rm=T)
 
-readcsv = T #read features as csv or Rdata
+readcsv = F #read features as csv or Rdata
 overwrite = T #overwrite biclust?
 # writecsv = F
 
@@ -67,6 +67,7 @@ split_col = NULL # if certain rows in matrices should be analyzed in isolation, 
 bcmethods = c("plaid","CC","bimax","BB-binary","nmf-nsNMF","nmf-lee","nmf-brunet","CC","GrNMF-0","GrNMF-1","GrNMF-5","GrNMF-10") #biclustering methods; GrNMF-<weight of graph regularization>
 #,"quest", "CC", "spectral", "Xmotifs", have to change this manually in function...
 onlysigBB = T #only extract significant or all biclusters from BB-binary B2PS biclustering?
+pval_thres = .05
 Kr = 6; Kc = 20 #number of row and column biclusters for binary bayesian biclustering
 pthres = .01 #pthreshold for choosing biclusters out of all bayesian biclusters
 min_iter = 100 #BB-binary
@@ -126,6 +127,9 @@ a = foreach(feat_type=feat_types) %dopar% {
     if (!rownames(m0)[1]%in%meta_file[,id_col]) {
       cat("\nskipped: ",feat_type,", matrix rownames must match fileName column in meta_file","\n", sep="")
     }
+    if (!rownames(m0)[1]%in%meta_file[,id_col]) {
+      cat("\nskipped: ",feat_type,", matrix rownames must match fileName column in meta_file","\n", sep="")
+    }
     
     ## does feature matrix have cell populations on column names?
     layers = 0
@@ -143,7 +147,7 @@ a = foreach(feat_type=feat_types) %dopar% {
       if (is.null(mm)) next
       m_ordered = mm$m
       meta_file_ordered = mm$sm
-      if (is.null(mm)) next
+      if (all(meta_file_ordered[,target_col]==meta_file_ordered[1,target_col])) next
       
       ## split up analysis of feature matrix rows by split_col
       if (is.null(split_col)) {
@@ -179,7 +183,7 @@ a = foreach(feat_type=feat_types) %dopar% {
             if (bcmethod == "quest") bc = biclust(as.matrix(m), method=BCQuest(), number=Kr, ns=50)
             if (bc@Number==0) next
             
-            # GrNMF (mf)
+            bcb = NULL
             if (grepl("GrNMF",bcmethod) & colhascell & !grepl("_",colnames(m)[1])) {
               #build binary relation graph between features
               cellpops = colnames(m)
@@ -194,25 +198,29 @@ a = foreach(feat_type=feat_types) %dopar% {
               }
               # medge = Matrix(medge,sparse=T)
               # bicluster
-              bcb = grnmf(t(m), medge, k=Kr, lambda_multiple=as.numeric(str_split(bcmethod,"-")[[1]][2]), n_iter=max(ncol(m),1000), converge=1e-06, dynamic_lambda=T)
+              bcb = grnmf(t(as.matrix(m)), medge, k=Kr, lambda_multiple=as.numeric(str_split(bcmethod,"-")[[1]][2]), n_iter=max(ncol(m),1000), converge=1e-06, dynamic_lambda=T)
               # bcb = grnmf(t(m), medge, k=Kr, lambda_multiple=1, n_iter=1000, converge=1e-06, dynamic_lambda=T)
+              if (is.null(bcb)) next
+              
               bcb$rowxfactor = bcb$V
               bcb$factorxcol = t(bcb$U)
+              if (all(is.na(bcb$rowxfactor))) next
             }
             
-            bcb = NULL
-            
-            # fabia (mf)
+            # unused
             if (bcmethod == "fabia") {
               bcb = fabia(as.matrix(abs(m)), p=Kr,alpha=0.01,cyc=max(ncol(m),1000),spl=0,spz=0.5,non_negative=0,random=1.0,center=2,norm=1,scale=0.0,lap=1.0,nL=0,lL=0,bL=0)
+              if (is.null(bcb)) next
+              
               bcb$rowxfactor = bcb@L; if(all(bcb$rowxfactor==0)) next
               bcb$factorxcol = bcb@Z
             }
             
-            # NMF (mf)
             tryCatch({
               if (grepl("nmf",bcmethod)) {
                 bcb = nmf(as.matrix(abs(m)), rank=Kr, method=str_split(bcmethod,"-")[[1]][2])#, nrun=10, method=list("lee", "brunet", "nsNMF"))
+                if (is.null(bcb)) next
+                
                 bcb$rowxfactor = basis(bcb)
                 bcb$factorxcol = coef(bcb)
               } 
@@ -319,18 +327,20 @@ a = foreach(feat_type=feat_types) %dopar% {
               rowclust = rowxcluster_to_cluster(bc@RowxNumber)
               colclust = clusterxcol_to_cluster(bc@NumberxCol)
             } 
-            rowlabel = sm[,target_col]
+            # rowlabel = sm[,target_col]
             
-            names(rowclust) = names(rowlabel) = rownames(m)
+            # names(rowclust) = names(rowlabel) = rownames(m)
+            names(rowclust) = rownames(m)
             names(colclust) = colnames(m)
             # f1 = f.measure.comembership(rowlabel,rowclust)
             
             # save biclustering
-            bc0 = list(source=bc,rowclust=rowclust,colclust=colclust,rowlabel=rowlabel)
+            bc0 = list(source=bc,rowclust=rowclust,colclust=colclust)
+            # bc0 = list(source=bc,rowclust=rowclust,colclust=colclust,rowlabel=rowlabel)
             save(bc0, file=paste0(bcname,".Rdata"))
             write.csv(rowclust, file=paste0(bcname,"_rowclust.csv"))
             write.csv(colclust, file=paste0(bcname,"_colclust.csv"))
-            write.csv(rowlabel, file=paste0(bcname,"_rowlabel.csv"))
+            # write.csv(rowlabel, file=paste0(bcname,"_rowlabel.csv"))
             
             # #save row/col as csv
             # try({
