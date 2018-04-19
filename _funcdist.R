@@ -414,23 +414,32 @@ getphenoChild <- function (phenoMeta, no_cores=1) {
     }
   }
   
-  phenoChild = list()
-  phenoChildpn = list()
+  phenoChild = phenoChild_names = phenoChild_ind = phenoChildpn = phenoChildpn_names = phenoChildpn_ind = list()
   for (i in 1:length(ppcc)) {
-    if (!is.null(ppcc[[i]]$pc)) phenoChild[[i]] = ppcc[[i]]$pc
-    if (!is.null(ppcc[[i]]$pc)) phenoChildpn[[i]] = ppcc[[i]]$pcnp
+    if (!is.null(ppcc[[i]]$pc)) {
+      phenoChild[[i]] = ppcc[[i]]$pc
+      phenoChild_names[[i]] = list()
+      phenoChild_names[[i]][[1]] = phenoMeta$phenotype[ppcc[[i]]$pc[[1]]]
+      phenoChild_names[[i]][[2]] = phenoMeta$phenotype[ppcc[[i]]$pc[[2]]]
+    } 
+    if (!is.null(ppcc[[i]]$pcnp)) {
+      phenoChildpn[[i]] = ppcc[[i]]$pcnp
+      phenoChildpn_names[[i]] = list()
+      phenoChildpn_names[[i]][[1]] = phenoMeta$phenotype[ppcc[[i]]$pcnp[[1]]]
+      phenoChildpn_names[[i]][[2]] = phenoMeta$phenotype[ppcc[[i]]$pcnp[[2]]]
+    } 
   }
   
   phenoChild_ind <- which(vapply(phenoChild, Negate(is.null), NA))
   phenoChildpn_ind <- which(vapply(phenoChildpn, Negate(is.null), NA))
   
-  phenoChild = phenoChild[phenoChild_ind]
-  phenoChildpn = phenoChildpn[phenoChildpn_ind]
+  phenoChild = phenoMeta$phenotype[phenoChild_ind]
+  phenoChildpn = phenoMeta$phenotype[phenoChildpn_ind]
   
-  names(phenoChild) = phenoMeta$phenotype[phenoChild_ind]
-  names(phenoChildpn) = phenoMeta$phenotype[phenoChildpn_ind]
+  names(phenoChild) = names(phenoChild_names) = phenoMeta$phenotype[phenoChild_ind]
+  names(phenoChildpn) = names(phenoChildpn_names) = phenoMeta$phenotype[phenoChildpn_ind]
   
-  return(list(phenoChild=phenoChild, phenoChild_ind=phenoChild_ind, phenoChildpn=phenoChildpn, phenoChildpn_ind=phenoChildpn_ind))
+  return(list(phenoChild=phenoChild, phenoChild_ind=phenoChild_ind, phenoChild_names=phenoChild_names, phenoChildpn=phenoChildpn, phenoChildpn_ind=phenoChildpn_ind, phenoChildpn_names=phenoChildpn_names))
 }
 
 getphenoParent_phenoChild <- function(phenoChild,phenoChild_ind, phenoChildpn=NULL, phenoChildpn_ind=NULL, no_cores=1) {
