@@ -20,6 +20,7 @@ biclust_source_dir = paste(biclust_dir,  "/source", sep=""); dir.create (biclust
 library(biclust)
 library(NMF)
 library(GrNMF) #library(devtools); install_github("jstjohn/GrNMF")
+library(fabia)
 library(pheatmap)
 library(foreach)
 library(doMC)
@@ -30,7 +31,7 @@ source("~/projects/IMPC/code/_funcdist.R")
 source("~/projects/IMPC/code/_bayesianbiclustering.R")
 
 ## setup Cores for parallel processing (parallelized for each feature)
-no_cores = 3#detectCores()-3
+no_cores = 15#detectCores()-3
 registerDoMC(no_cores)
 
 
@@ -60,7 +61,7 @@ id_col = "fileName" #the column in meta_file matching rownames in feature matric
 order_cols = NULL #if matrix rows should be ordered by a certain column
 split_col = "tube" # if certain rows in matrices should be analyzed in isolation, split matrix by this column in meta_file
 
-bcmethods = c("plaid","CC","bimax","BB-binary","nmf-nsNMF","nmf-lee","nmf-brunet","CC","GrNMF-0","GrNMF-1","GrNMF-5","GrNMF-10") #biclustering methods; GrNMF-<weight of graph regularization>
+bcmethods = c("plaid","CC","bimax","BB-binary","nmf-nsNMF","nmf-lee","nmf-brunet","CC","GrNMF-0","GrNMF-1","GrNMF-5","GrNMF-10","fabia") #biclustering methods; GrNMF-<weight of graph regularization>
 #,"quest", "CC", "spectral", "Xmotifs", have to change this manually in function...
 onlysigBB = T #only extract significant or all biclusters from BB-binary B2PS biclustering?
 pval_thres = .05
@@ -203,11 +204,12 @@ a = foreach(feat_type=feat_types) %dopar% {
             
             # unused
             if (bcmethod == "fabia") {
-              bcb = fabia(as.matrix(abs(m)), p=Kr,alpha=0.01,cyc=max(ncol(m),1000),spl=0,spz=0.5,non_negative=0,random=1.0,center=2,norm=1,scale=0.0,lap=1.0,nL=0,lL=0,bL=0)
-              if (is.null(bcb)) next
+              bcb0 = fabia(as.matrix(abs(m)), p=Kr,alpha=0.01,cyc=max(ncol(m),1000),spl=0,spz=0.5,non_negative=0,random=1.0,center=2,norm=1,scale=0.0,lap=1.0,nL=0,lL=0,bL=0)
+              if (is.null(bcb0)) next
               
-              bcb$rowxfactor = bcb@L; if(all(bcb$rowxfactor==0)) next
-              bcb$factorxcol = bcb@Z
+              bcb = list(source=bcb0)
+              bcb$rowxfactor = bcb0@L; if(all(bcb$rowxfactor==0)) next
+              bcb$factorxcol = bcb0@Z
             }
             
             tryCatch({
@@ -323,6 +325,8 @@ a = foreach(feat_type=feat_types) %dopar% {
             } 
             # rowlabel = sm[,target_col]
             
+            if (length(unique(rowclust))==1) next
+            
             # names(rowclust) = names(rowlabel) = rownames(m)
             names(rowclust) = rownames(m)
             names(colclust) = colnames(m)
@@ -374,8 +378,7 @@ a = foreach(feat_type=feat_types) %dopar% {
           
         }
         
-        
-      } 
+      } #split
     } #layer
     TimeOutput(start2)
   }, error = function(err) { cat(paste("ERROR:  ",err)); return(T) })

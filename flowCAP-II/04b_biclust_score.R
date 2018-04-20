@@ -30,7 +30,7 @@ source("~/projects/IMPC/code/_funcdist.R")
 source("~/projects/IMPC/code/_bayesianbiclustering.R")
 
 #Setup Cores
-no_cores = 3#detectCores()-3
+no_cores = 15#detectCores()-3
 registerDoMC(no_cores)
 
 
@@ -97,7 +97,7 @@ score_list = foreach(clust_path=clust_paths) %dopar% {
     
     ## prep clusters / label
     rowclust = rowclust0 = read.csv(paste0(clust_path,"_rowclust.csv"), row.names=1)
-    rowclust = rowclust[,1]; 
+    rowclust = rowclust[,1]
     names(rowclust) = rownames(rowclust0)
     mm = get_feat_matrix2(clust_fileName=NULL, feat_dir=NULL, meta_file=meta_file, id_col=id_col, row_names=names(rowclust), col_names=NULL, getcsv=readcsv)
     sm = mm$sm
@@ -188,8 +188,8 @@ score_list = foreach(clust_path=clust_paths) %dopar% {
     
     # write.csv(score,file=paste0(biclust_score_dir, "/", clust_path, "_score.csv"))
     TimeOutput(start2)
+    return(unlist(score))
   }, error = function(err) { cat(paste("error:  ",err)); return(NA) })
-  return(unlist(score))
 }
 
 

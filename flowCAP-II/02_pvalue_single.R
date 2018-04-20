@@ -17,7 +17,6 @@ feat_dir = paste(result_dir, "/feat", sep="")
 feat_file_cell_pval_dir = paste(feat_dir, "/file-cell-pval",sep="")
 feat_file_cell_pvalTRIM_dir = paste(feat_dir, "/file-cell-pvalTRIM",sep="")
 feat_file_cell_logfold_dir = paste(feat_dir, "/file-cell-logfold",sep="")
-feat_file_cell_logfoldTRIM_dir = paste(feat_dir, "/file-cell-logfoldTRIM",sep="")
 feat_file_cell_countAdjMax_dir = paste(feat_dir, "/file-cell-countAdjMax",sep="")
 feat_file_cell_countAdjKO_dir = paste(feat_dir, "/file-cell-countAdjKO",sep="")
 
@@ -57,7 +56,7 @@ id_col = "fileName"
 target_col = "aml"
 split_col = "tube"
 
-feat_types = c("file-cell-countAdj","file-cell-prop")
+feat_types = c("file-cell-countAdj")
 
 
 
@@ -155,7 +154,7 @@ for (feat_type in feat_types) {
     }
     
     feat_file_cell_pvalFULL = -log(feat_file_cell_pvalFULL0)
-    feat_file_cell_pvalFULL[is.nan(feat_file_cell_pvalFULL)] = 0
+    feat_file_cell_pvalFULL[is.na(feat_file_cell_pvalFULL)] = 0
     feat_file_cell_pvalFULL[feat_file_cell_pvalFULL==Inf] = 10^(ceiling(log(max(feat_file_cell_pvalFULL[feat_file_cell_pvalFULL!=Inf]),10)))
     save(feat_file_cell_pvalFULL, file=paste0(feat_file_cell_pval_dir, adj, "FULL.", feat_type,".Rdata"))
     
@@ -170,8 +169,14 @@ for (feat_type in feat_types) {
     
     feat_file_cell_pvalTRIM[trimIndex] = 0
     if (writecsv) write.csv(feat_file_cell_pvalTRIM, file=paste0(feat_file_cell_pval_dir, adj, "TRIM.", feat_type,".csv"), row.names=T)
-    feat_file_cell_pvalTRIM = Matrix(feat_file_cell_pvalTRIM, sparse=T)
+    feat_file_cell_pvalTRIM = Matrix(feat_file_cell_pvalTRIM, sparse=T, dimnames=dimnames(feat_file_cell_pvalTRIM))
     save(feat_file_cell_pvalTRIM, file=paste0(feat_file_cell_pval_dir, adj, "TRIM.", feat_type,".Rdata"))
+    
+    mt = m
+    mt[trimIndex] = 0
+    if (writecsv) write.csv(mt, file=paste0(feat_dir,"/",feat_type, adj, "TRIM.", feat_type,".csv"), row.names=T)
+    mt = Matrix(mt, sparse=T, dimnames=dimnames(m))
+    save(mt, file=paste0(feat_dir,"/",feat_type, adj, "TRIM.", feat_type,".Rdata"))
     
     if (adj=="") { #don't need to trim others with adjusted p values, too much space taken up lol
       save(feat_file_cell_logfoldFULL, file=paste0(feat_file_cell_logfold_dir, "FULL.", feat_type,".Rdata"))
@@ -181,9 +186,9 @@ for (feat_type in feat_types) {
       if (writecsv) write.csv(feat_file_cell_logfold, file=paste0(feat_file_cell_logfold_dir, ".", feat_type,".csv"))
       
       feat_file_cell_logfoldTRIM[trimIndex] = 0
-      if (writecsv) write.csv(feat_file_cell_logfoldTRIM, file=paste0(feat_file_cell_logfoldTRIM_dir, "TRIM.", feat_type,".csv"), row.names=T)
-      feat_file_cell_logfoldTRIM = Matrix(feat_file_cell_logfoldTRIM, sparse=T)
-      save(feat_file_cell_logfoldTRIM, file=paste0(feat_file_cell_logfoldTRIM_dir, "TRIM.", feat_type,".Rdata"))
+      if (writecsv) write.csv(feat_file_cell_logfoldTRIM, file=paste0(feat_file_cell_logfold_dir, "TRIM.", feat_type,".csv"), row.names=T)
+      feat_file_cell_logfoldTRIM = Matrix(feat_file_cell_logfoldTRIM, sparse=T, dimnames=dimnames(feat_file_cell_logfoldTRIM))
+      save(feat_file_cell_logfoldTRIM, file=paste0(feat_file_cell_logfold_dir, "TRIM.", feat_type,".Rdata"))
       
       feat_file_cell_countAdjMax = feat_file_cell_countAdjMaxFULL[!trimRowIndex,!trimColIndex]
       save(feat_file_cell_countAdjMax, file=paste0(feat_file_cell_countAdjMax_dir, ".", feat_type,".Rdata"))
@@ -192,9 +197,7 @@ for (feat_type in feat_types) {
     
   }
   
-  TimeOutput(start1)
-  
-  
+
   cat("\n feat_type", feat_type,": ",TimeOutput(start1), "\n", sep="") #IMPC Sanger P1 ~3h
 }
 
