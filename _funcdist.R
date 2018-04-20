@@ -214,6 +214,47 @@ get_feat_matrix <- function(clust_fileName, feat_dir, mc, meta_file, id_col, tar
   return(list(m=m,sm=sm))
 }
 
+get_feat_matrix2 <- function(clust_fileName=NULL, feat_dir=NULL, meta_file=NULL, id_col=NULL, row_names, col_names=NULL, getcsv=F) {
+  # get original feature matrix and meta file
+  getm = F
+  if (!is.null(clust_fileName) & !is.null(feat_dir)) {
+    getm = T
+    
+    x = str_split(clust_fileName,"_")[[1]]
+    # bcmethod = x[1]
+    feature = x[2]
+    if (getcsv) {
+      m0 = read.csv(paste0(feat_dir,"/",feature,".csv"),row.names=1, check.names=F)
+    } else {
+      m0 = get(load(paste0(feat_dir,"/",feature,".Rdata")))
+    }
+    morder = match(row_names,rownames(m0))
+    morder = morder[!is.na(morder)]
+    m = m0[morder,]
+  }
+  
+  if (!is.null(col_names) & getm) {
+    mcorder = match(col_names,colnames(m0))
+    mcorder = mcorder[!is.na(mcorder)]
+    m = m[,mcorder]
+  }
+  
+  getsm = F
+  if (!is.null(meta_file) & !is.null(id_col)) {
+    getsm = T
+    
+    if (getm) {
+      smorder = match(rownames(m),meta_file[,id_col])
+    } else {
+      smorder = match(row_names,meta_file[,id_col])
+    }
+    smorder = smorder[!is.na(smorder)]
+    sm = meta_file[smorder,]
+  }
+  if (getm & getsm) return(list(m=m,sm=sm))
+  if (!getm & getsm) return(list(sm=sm))
+  if (getm & !getsm) return(list(m=m))
+}
 
 
 
@@ -311,12 +352,34 @@ NCA_score <- function(x,y,delta=1,fast=F,doUnderflow=T) {
 ## Input: 2 vector of labels
 ## Output: Precision, Recall, Specificity, F, Accuracy
 f.measure.comembership = function(la,cl) {
-  require(clusteval)
-  ftpn = comembership_table(la,cl)
-  tn = ftpn$n_00
-  tp = ftpn$n_11
-  fn = ftpn$n_10
-  fp = ftpn$n_01
+  # require(clusteval)
+  # ftpn = comembership_table(la,cl)
+  # 
+  # tn = ftpn$n_00
+  # tp = ftpn$n_11
+  # fn = ftpn$n_10
+  # fp = ftpn$n_01
+  
+  tn = tp = fn = fp = 0
+  for (lai in 1:(length(la)-1)) {
+    for (laj in (lai+1):length(la)) {
+      posl = la[lai] == la[laj]
+      posc = cl[lai] == cl[laj]
+      if (posl) {
+        if (posc) {
+          tp = tp+1
+        } else {
+          fn = fn+1
+        }
+      } else {
+        if (posc) {
+          fp = fp+1
+        } else {
+          tn = tn+1
+        }
+      }
+    }
+  }
   
   p=tp/(tp+fp)
   r=tp/(tp+fn)
@@ -999,3 +1062,5 @@ clusterxcol_to_cluster <- function(clusterxcol) {
 
 
 
+##Input: clustering; label
+##Output: f comembership table
