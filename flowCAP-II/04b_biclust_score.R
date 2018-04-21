@@ -145,7 +145,7 @@ score_list = foreach(clust_path=clust_paths) %dopar% {
     f1c = f.measure.comembership(rowlabel,rowclust); names(f1c) = paste0(names(f1c), "_co")
     # r = adjustedRand(rowlabel,rowclust)
     # score = c(score,f1c,r)
-    score = c(score,f1c)
+    score = c(score,unlist(f1c))
     
     # ## internal validation NCA (distance)
     # cl = la0
@@ -188,7 +188,7 @@ score_list = foreach(clust_path=clust_paths) %dopar% {
     
     # write.csv(score,file=paste0(biclust_score_dir, "/", clust_path, "_score.csv"))
     TimeOutput(start2)
-    return(unlist(score))
+    return(score)
   }, error = function(err) { cat(paste("error:  ",err)); return(NA) })
 }
 
