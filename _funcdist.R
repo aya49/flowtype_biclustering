@@ -384,7 +384,7 @@ f.measure.comembership = function(la,cl) {
   p=tp/(tp+fp)
   r=tp/(tp+fn)
   sp=tn/(tn+fp)
-  return(list(p=p, r=r, sp=sp, f_comember=2*p*r/(p+r), a=(tp+tn)/(sum(unlist(ftpn)))))
+  return(list(p=p, r=r, sp=sp, f_comember=2*p*r/(p+r), a=(tp+tn)/(tn+tp+fn+fp)))
 }
 
 
