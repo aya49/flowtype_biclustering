@@ -35,7 +35,7 @@ source("~/projects/IMPC/code/_funcdist.R")
 source("~/projects/IMPC/code/_bayesianbiclustering.R")
 
 #Setup Cores
-no_cores = detectCores()-3
+no_cores = detectCores()-1
 registerDoMC(no_cores)
 
 

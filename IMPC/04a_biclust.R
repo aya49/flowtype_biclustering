@@ -52,7 +52,7 @@ options(stringsAsFactors=FALSE)
 options(na.rm=T)
 
 readcsv = F #read features as csv or Rdata
-overwrite = T #overwrite biclust?
+overwrite = F #overwrite biclust?
 # writecsv = F
 
 good_count = 3 #trim matrix; only keep col/rows that meet criteria for more than 3 elements
@@ -65,7 +65,7 @@ id_col = "fileName" #the column in meta_file matching rownames in feature matric
 order_cols = NULL #if matrix rows should be ordered by a certain column
 split_col = NULL # if certain rows in matrices should be analyzed in isolation, split matrix by this column in meta_file
 
-bcmethods = c("plaid","CC","bimax","BB-binary","nmf-nsNMF","nmf-lee","nmf-brunet","CC","GrNMF-0","GrNMF-1","GrNMF-5","GrNMF-10","fabia") #biclustering methods; GrNMF-<weight of graph regularization>
+bcmethods = c("plaid","BB-binary","nmf-nsNMF","nmf-lee","nmf-brunet","GrNMF-0","GrNMF-1","GrNMF-5","GrNMF-10","fabia")#,"CC","bimax" #biclustering methods; GrNMF-<weight of graph regularization>
 #,"quest", "CC", "spectral", "Xmotifs", have to change this manually in function...
 onlysigBB = T #only extract significant or all biclusters from BB-binary B2PS biclustering?
 pval_thres = .05
@@ -181,6 +181,12 @@ a = foreach(feat_type=feat_types) %dopar% {
             if (bcmethod == "quest") bc = biclust(as.matrix(m), method=BCQuest(), number=Kr, ns=50)
             if (bc@Number==0) next
             
+            if (grepl("nmf|GrNMF|fabia",bcmethod)) {
+              m_pos = m
+              if (!grepl("pval|logfold",feat_type)) m_pos[m_pos<0] = 0
+              if (grepl("pval|logfold",feat_type)) m_pos = abs(m_pos)
+            }
+            
             bcb = NULL
             if (grepl("GrNMF",bcmethod) & colhascell & !grepl("_",colnames(m)[1])) {
               #build binary relation graph between features
@@ -196,7 +202,7 @@ a = foreach(feat_type=feat_types) %dopar% {
               }
               # medge = Matrix(medge,sparse=T)
               # bicluster
-              bcb = grnmf(t(as.matrix(m)), medge, k=Kr, lambda_multiple=as.numeric(str_split(bcmethod,"-")[[1]][2]), n_iter=max(ncol(m),1000), converge=1e-06, dynamic_lambda=T)
+              bcb = grnmf(t(as.matrix(m_pos)), medge, k=Kr, lambda_multiple=as.numeric(str_split(bcmethod,"-")[[1]][2]), n_iter=max(ncol(m),1000), converge=1e-06, dynamic_lambda=T)
               # bcb = grnmf(t(m), medge, k=Kr, lambda_multiple=1, n_iter=1000, converge=1e-06, dynamic_lambda=T)
               if (is.null(bcb)) next
               
@@ -207,7 +213,7 @@ a = foreach(feat_type=feat_types) %dopar% {
             
             # unused
             if (bcmethod == "fabia") {
-              bcb0 = fabia(as.matrix(abs(m)), p=Kr,alpha=0.01,cyc=max(ncol(m),1000),spl=0,spz=0.5,non_negative=0,random=1.0,center=2,norm=1,scale=0.0,lap=1.0,nL=0,lL=0,bL=0)
+              bcb0 = fabia(as.matrix(m_pos), p=Kr,alpha=0.01,cyc=max(ncol(m),1000),spl=0,spz=0.5,non_negative=0,random=1.0,center=2,norm=1,scale=0.0,lap=1.0,nL=0,lL=0,bL=0)
               if (is.null(bcb0)) next
               
               bcb = list(source=bcb0)
@@ -217,7 +223,7 @@ a = foreach(feat_type=feat_types) %dopar% {
             
             tryCatch({
               if (grepl("nmf",bcmethod)) {
-                bcb = nmf(as.matrix(abs(m)), rank=Kr, method=str_split(bcmethod,"-")[[1]][2])#, nrun=10, method=list("lee", "brunet", "nsNMF"))
+                bcb = nmf(as.matrix(m_pos), rank=Kr, method=str_split(bcmethod,"-")[[1]][2])#, nrun=10, method=list("lee", "brunet", "nsNMF"))
                 if (is.null(bcb)) next
                 
                 bcb$rowxfactor = basis(bcb)

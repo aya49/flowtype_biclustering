@@ -36,7 +36,7 @@ source("~/projects/IMPC/code/_funcdist.R")
 
 
 ## cores
-no_cores = 14#detectCores() - 2
+no_cores = 15#detectCores() - 2
 registerDoMC(no_cores)
 
 
@@ -62,7 +62,7 @@ target_col = "gene"
 time_col = "date"
 split_col = "gender"
 
-feat_types = c("file-cell-countAdj")
+feat_types = c("file-cell-countAdj.PEER-layerbylayer","file-cell-countAdj.PEER-all")#,"file-cell-countAdj")
 
 
 
@@ -130,30 +130,41 @@ for (feat_type in feat_types) {
   cat(paste("getting pValues of ", ncol(m), " possible cell populations for ", length(rowcombos), " genotypes ", sep="")) #3iTCell specific
   
   loop.ind = 1:ncol(m)
-  result = foreach(k = loop.ind) %dopar% { #for each phenotype
+  loop.inds = split(loop.ind, sort(loop.ind%%(no_cores)))
+  result = foreach(loop.ind = loop.inds) %dopar% { #for each phenotype
     #for (k in 1:ncol(m)){ cat(paste(" ", j, sep="")) {
     
-    pvalcol = rep(0,length(rowcombos)) 
-    logfold = rep(0,length(rowcombos))
-    maxcount = rep(0,length(rowcombos))
-    kocount = rep(0,length(rowcombos))
-    for (j in 1:length(rowcombos)) { #for each KO gene
-      compare1 = as.numeric(m[ rowcombos[[j]][[1]],k ])
-      compare2 = as.numeric(m[ rowcombos[[j]][[2]],k ])
-      if (!exp(mean(log(compare1)))<cellCountThres & !exp(mean(log(compare2)))<cellCountThres & !grepl("Prop",feat_type)) { #TRIM: if both WT and KO medians (to avoid outler influence) is < cell count threshold then change is not significant (set as 1)
-        # if (test=="wilcox") {
-        #   pvalcol[j] = wilcox.test(compare1, compare2)$p.value
-        # } 
-        # else if (test=="ttest") {
-        #   try({ pvalcol[j] = t.test(compare1, compare2)$p.value })
-        # } 
-        pvalcol[j] = t.test.single(compare1, compare2)
-        logfold[j] = log(compare2/exp(mean(log(compare1))))
-        maxcount[j] = max(compare2,exp(mean(log(compare1))))
-        kocount[j] = compare2
+    stuff = list()
+    for (k in loop.ind) {
+      
+      pvalcol = rep(0,length(rowcombos)) 
+      logfold = rep(0,length(rowcombos))
+      maxcount = rep(0,length(rowcombos))
+      kocount = rep(0,length(rowcombos))
+      for (j in 1:length(rowcombos)) { #for each KO gene
+        compare1 = as.numeric(m[ rowcombos[[j]][[1]],k ])
+        compare2 = as.numeric(m[ rowcombos[[j]][[2]],k ])
+        if ((!median(compare1)<cellCountThres & !mean(compare2)<cellCountThres) | !grepl("prop",feat_type,ignore.case=T)) { #TRIM: if both WT and KO medians (to avoid outler influence) is < cell count threshold then change is not significant (set as 1)
+          # if (test=="wilcox") {
+          #   pvalcol[j] = wilcox.test(compare1, compare2)$p.value
+          # } 
+          # else if (test=="ttest") {
+          #   try({ pvalcol[j] = t.test(compare1, compare2)$p.value })
+          # } 
+          pvalcol[j] = t.test.single(compare1, compare2)
+          logfold[j] = log(compare2/exp(mean(log(compare1))))
+          maxcount[j] = max(compare2,exp(mean(log(compare1))))
+          kocount[j] = compare2
+        }
       }
+      stuff[[k]] = list(pvalcol=pvalcol,logfold=logfold,maxcount=maxcount, kocount=kocount)
     }
-    return(list(pvalcol=pvalcol,logfold=logfold,maxcount=maxcount, kocount=kocount))
+    pvalcols = foreach(l=1:length(stuff),.combine="cbind") %dopar% { return(stuff[[l]]$pvalcol) }
+    logfolds = foreach(l=1:length(stuff),.combine="cbind") %dopar% { return(stuff[[l]]$logfold) }
+    maxcounts = foreach(l=1:length(stuff),.combine="cbind") %dopar% { return(stuff[[l]]$maxcount) }
+    kocounts = foreach(l=1:length(stuff),.combine="cbind") %dopar% { return(stuff[[l]]$kocount) }
+    
+    return(list(pvalcol=pvalcols,logfold=logfolds,maxcount=maxcounts, kocount=kocounts))
   }
   
   # feat_file_cell_pval = lapply(1:length(result), function(i) return(result[[i]]$pvalcol))
