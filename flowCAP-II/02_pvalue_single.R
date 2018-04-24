@@ -31,7 +31,7 @@ source("~/projects/IMPC/code/_funcdist.R")
 
 
 ## cores
-no_cores = 3#detectCores() - 2
+no_cores = detectCores() - 2
 registerDoMC(no_cores)
 
 

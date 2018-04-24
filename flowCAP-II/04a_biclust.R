@@ -46,7 +46,7 @@ options(stringsAsFactors=FALSE)
 # options(device="cairo")
 options(na.rm=T)
 
-readcsv = F #read features as csv or Rdata
+readcsv = T #read features as csv or Rdata
 overwrite = T #overwrite biclust?
 # writecsv = F
 
@@ -384,7 +384,6 @@ a = foreach(feat_type=feat_types) %dopar% {
   }, error = function(err) { cat(paste("ERROR:  ",err)); return(T) })
   return(F)
 }
-
 
 
 
