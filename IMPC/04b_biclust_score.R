@@ -17,7 +17,7 @@ meta_dir = paste0(result_dir,"/meta")
 meta_file_dir = paste(meta_dir, "/file", sep="")
 feat_dir = paste(result_dir, "/feat", sep="")
 network_dir = paste(result_dir, "/network", sep=""); dir.create(network_dir, showWarnings=F)
-network_dist_dir = paste(network_dir, "/dist", sep=""); dir.create(network_dir, showWarnings=F)
+# network_dist_dir = paste(network_dir, "/dist", sep=""); dir.create(network_dir, showWarnings=F)
 
 ## output directories
 biclust_dir = paste(result_dir,  "/biclust", sep=""); dir.create (biclust_dir,showWarnings=F)
@@ -74,7 +74,7 @@ clust_paths = list.files(path=biclust_source_dir,pattern=".Rdata", full.names=T)
 clust_paths = gsub(".Rdata","",clust_paths)
 feat_count = "file-cell-countAdj"
 
-netdist_paths = list.files(path=network_dist_dir, full.names=T)
+netdist_paths = list.files(path=network_dir, full.names=T, recursive=T, pattern="dist_")
 
 
 
