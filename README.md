@@ -36,10 +36,10 @@ To run the pipeline for the FlowCAP-II data set, run the scripts in the followin
 
 ### IMPC data set
 The IMPC data set has several confounding factors, including time file was created on, therefore to account for confounding factors, we run additional scripts:
-- (01c_confound_peer-.R)[IMPC/01c_confound_peer-.R] adjusts normalized count feature for confounding factors.
-- (02a_timegroup.R)[IMPC/02a_timegroup.R] splits files by the time covariate/confounding factor
-- (02b_pvalue_singlefile.R)[IMPC/02b_pvalue_singlefile.R] creates the **p value** feature matrix
-- (02.5_pvalue_count_distribution_plots.R)[IMPC/02.5_pvalue_count_distribution_plots.R] plots distribution of p value feature value
+- [01c_confound_peer-.R](IMPC/01c_confound_peer-.R) adjusts normalized count feature for confounding factors.
+- [02a_timegroup.R](IMPC/02a_timegroup.R) splits files by the time covariate/confounding factor
+- [02b_pvalue_singlefile.R](IMPC/02b_pvalue_singlefile.R) creates the **p value** feature matrix
+- [02.5_pvalue_count_distribution_plots.R](IMPC/02.5_pvalue_count_distribution_plots.R) plots distribution of p value feature value
 
 IMPC also requires an additional scoring metric based off of the gene-protein interaction  network; in order to use this metric, run the following:
 - [00_data_innatedb.R](00_data_innatedb.R) calculates distances between genes (representative of the IMPC files as each file is made from a mouse with a different gene knocked out) needed to score clusterings; we download the TAB networks from [innatedb](http://www.innatedb.ca/redirect.do?go=downloadCurated); optionally [biogrid](https://downloads.thebiogrid.org/BioGRID) (accessed 201804)
