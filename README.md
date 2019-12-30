@@ -1,4 +1,4 @@
-# flowFeatureBiclusteringPipeline
+# flow Feature Biclustering Pipeline
 A pipeline for extracting features from and biclustering flow cytometry data
 
 
