@@ -1,6 +1,8 @@
 # flow Feature Biclustering Pipeline
 A pipeline for extracting features from and biclustering flow cytometry data
 
+This reporistory was created for SFU CMPT884 2018-01
+
 
 - Input: FlowType files derived from Flow Cytometry (FCM) FCS files
 - Output: Biclusters (file clusters and cell population clusters)
